@@ -44,6 +44,47 @@ class RendererTests(unittest.TestCase):
         finally:
             renderer.close()
 
+    def test_complete_document_uses_only_its_body(self):
+        source = r"""\documentclass{article}
+\usepackage{tikz}
+\begin{document}
+\[E=mc^2\]
+\end{document}"""
+        body, is_document = LatexRenderer._normalize_source(source)
+        self.assertTrue(is_document)
+        self.assertEqual(body, r"\[E=mc^2\]")
+
+    def test_fenced_complete_document_renders_transparently(self):
+        renderer = LatexRenderer()
+        try:
+            image = renderer.render(
+                """```latex
+\\documentclass{article}
+\\usepackage{amsmath}
+\\begin{document}
+The result is
+\\[\\int x^2\\,dx=\\frac{x^3}{3}+C.\\]
+\\end{document}
+```""",
+                block=True,
+            )
+            self.assertTrue(image.has_alpha)
+        finally:
+            renderer.close()
+
+    def test_document_shorthand_is_normalized(self):
+        body, is_document = LatexRenderer._normalize_source(
+            r"\document{article}\[x^2\]\end{document}"
+        )
+        self.assertTrue(is_document)
+        self.assertEqual(body, r"\[x^2\]")
+
+    def test_incomplete_document_is_rejected(self):
+        with self.assertRaisesRegex(RenderError, "incomplete"):
+            LatexRenderer._normalize_source(
+                r"\documentclass{article}\begin{document}x"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -50,8 +50,48 @@ def find_equations(lines: list[str], parse_dollars: bool = True) -> list[Equatio
     claimed_rows: set[int] = set()
     openers = {"[": "]", r"\[": r"\]", "$$": "$$"}
 
+    # Claim complete documents before their inner math delimiters. Claude often
+    # emits these in fenced code blocks, including an occasional invalid
+    # \document{article} shorthand. The renderer will discard the preamble.
+    document_start = None
+    document_end = None
+    for index, line in enumerate(lines):
+        token = line.strip()
+        if document_start is None and (
+            token.startswith(r"\documentclass")
+            or token.startswith(r"\begin{document}")
+            or token.startswith(r"\document{")
+        ):
+            document_start = index
+        if document_start is not None and r"\end{document}" in token:
+            document_end = index
+            break
+    if document_start is not None:
+        if document_end is None:
+            claimed_rows.update(range(document_start, len(lines)))
+        else:
+            start = document_start
+            if start > 0 and lines[start - 1].strip().lower() in {"```latex", "```tex", "```"}:
+                start -= 1
+            end = document_end
+            if end + 1 < len(lines) and lines[end + 1].strip() == "```":
+                end += 1
+            source = "\n".join(lines[start : end + 1]).strip()
+            nonempty = [line for line in lines[start : end + 1] if line.strip()]
+            column = min(_indent(line) for line in nonempty)
+            spans = tuple(
+                (source_row, column, max(1, len(lines[source_row].rstrip()) - column))
+                for source_row in range(start, end + 1)
+                if lines[source_row].rstrip()
+            )
+            regions.append(EquationRegion(source, True, start, column, spans))
+            claimed_rows.update(range(start, end + 1))
+
     row = 0
     while row < len(lines):
+        if row in claimed_rows:
+            row += 1
+            continue
         token = lines[row].strip()
         closer = openers.get(token)
         if closer is None:
@@ -130,7 +170,7 @@ class ScreenLatexOverlay:
         self.screen.dirty.clear()
         self._placements: dict[EquationRegion, _Placement] = {}
         self._failed: set[EquationRegion] = set()
-        self._control_tail = b""
+        self._pending = bytearray()
         self._saw_sync = False
 
     def resize(self, columns: int, rows: int) -> None:
@@ -143,20 +183,57 @@ class ScreenLatexOverlay:
         )
 
     def feed(self, data: bytes) -> bytes:
-        self.stream.feed(data)
-        controls = self._control_tail + data
-        if self._SYNC_START in controls:
-            self._saw_sync = True
-        refresh = self._SYNC_END in controls or (not self._saw_sync and (b"\n" in data or b"\r" in data))
-        self._control_tail = controls[-16:]
-        if not refresh:
-            return data
-        return data + self._refresh()
+        """Preserve synchronized-update boundaries while injecting overlays.
+
+        A single PTY read can contain several complete Codex frames plus the
+        beginning of another one. Each frame must be reconciled against the
+        screen state at *its* boundary; batching the whole read makes overlays
+        use future coordinates and is especially destructive during scrolling.
+        """
+        self._pending.extend(data)
+        output = bytearray()
+        while True:
+            boundary = self._pending.find(self._SYNC_END)
+            if boundary < 0:
+                break
+            end = boundary + len(self._SYNC_END)
+            segment = bytes(self._pending[:end])
+            del self._pending[:end]
+            self.stream.feed(segment)
+            if self._SYNC_START in segment:
+                self._saw_sync = True
+            commands = self._reconcile_commands()
+            # Insert our repaint before Codex commits its synchronized frame.
+            # Deletion, child scrolling, source clearing, and replacement image
+            # placement therefore become visible as one atomic update.
+            output.extend(segment[:-len(self._SYNC_END)])
+            output.extend(self._preserve_cursor(commands))
+            output.extend(self._SYNC_END)
+
+        # Retain the longest possible split control-sequence prefix. Everything
+        # before it is safe to feed and forward immediately.
+        keep = max(len(self._SYNC_START), len(self._SYNC_END)) - 1
+        if len(self._pending) > keep:
+            count = len(self._pending) - keep
+            segment = bytes(self._pending[:count])
+            del self._pending[:count]
+            self.stream.feed(segment)
+            if self._SYNC_START in segment:
+                self._saw_sync = True
+            output.extend(segment)
+            if not self._saw_sync and (b"\n" in segment or b"\r" in segment):
+                output.extend(self._wrap_repaint(self._reconcile_commands()))
+        return bytes(output)
 
     def finish(self) -> bytes:
-        return self._refresh()
+        output = bytearray(self._pending)
+        if self._pending:
+            self.stream.feed(bytes(self._pending))
+            self._pending.clear()
+        output.extend(self._wrap_repaint(self._reconcile_commands()))
+        return bytes(output)
 
-    def _refresh(self) -> bytes:
+    def _reconcile_commands(self) -> bytes:
         regions = set(find_equations(self.screen.display, self.parse_dollars))
         dirty = set(self.screen.dirty)
         commands = bytearray()
@@ -196,9 +273,16 @@ class ScreenLatexOverlay:
 
         self._placements = retained
         self.screen.dirty.clear()
+        return bytes(commands)
+
+    @staticmethod
+    def _preserve_cursor(commands: bytes) -> bytes:
+        return b"\x1b7" + commands + b"\x1b8" if commands else b""
+
+    def _wrap_repaint(self, commands: bytes) -> bytes:
         if not commands:
             return b""
-        return self._SYNC_START + b"\x1b7" + bytes(commands) + b"\x1b8" + self._SYNC_END
+        return self._SYNC_START + self._preserve_cursor(commands) + self._SYNC_END
 
     @staticmethod
     def _move(row: int, column: int) -> bytes:

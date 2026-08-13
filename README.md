@@ -17,6 +17,7 @@ which works in both Kitty and Ghostty.
 - Delimiters: `\(...\)`, `\[...\]`, `$$...$$`, and conservative `$...$`
 - Codex-normalized delimiters: standalone `[`/`]` lines and TeX-containing
   parentheses such as `(\mathbf{u})`
+- Complete `latex`/`tex` code blocks and document bodies emitted by Claude
 - Delimiters split across arbitrary PTY reads
 - Full-screen TUI output reconstructed with a VT screen emulator
 - ANSI styling, cursor movement, erasing, scrolling, and synchronized repaints
@@ -79,6 +80,11 @@ screen, clears their source cells, and places images at the same row and column
 without disturbing the child's cursor. This is necessary for Codex because its
 apparently linear response is assembled through many disjoint screen updates.
 
+Synchronized updates are processed as true frame boundaries even when several
+frames arrive in one PTY read or a boundary escape is split across reads. Image
+deletion, scrolling, source clearing, and replacement placement are inserted into
+the same atomic frame, preventing stale overlays from flashing at old coordinates.
+
 A completed fragment is compiled in a temporary directory with shell escape
 disabled, converted by `dvipng`, base64 chunked, and emitted as a positioned Kitty
 image. Images are deleted and redrawn when the application repaints their cells.
@@ -96,6 +102,13 @@ the terminal. For that output, anytex also recognizes `[` and `]` when each is o
 its own line and the enclosed text contains a TeX command. A parenthesized span is
 recognized only when it begins with a TeX command, such as `(\rho)`; ordinary prose
 like `(p)` is deliberately left alone.
+
+When Claude emits a complete LaTeX document, anytex treats it as one screen
+region. It extracts only the text between `\begin{document}` and
+`\end{document}` and renders that body using anytex's own fixed preamble. A fenced
+`latex`/`tex` block and Claude's occasional `\document{article}` shorthand are
+also recognized. Model-supplied document classes and packages are intentionally
+ignored rather than executed.
 
 If compilation fails, the source cells remain visible, so output is never silently
 lost. The first error is reported; `--verbose` reports every error.

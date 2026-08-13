@@ -41,6 +41,22 @@ BODY
 \end{document}
 """
 
+_DOCUMENT_TEMPLATE = r"""\documentclass[border=2pt,varwidth=\maxdimen]{standalone}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{xcolor}
+\begin{document}
+\color[HTML]{COLOR}
+BODY
+\end{document}
+"""
+
+_DOCUMENT_BEGIN = re.compile(r"\\begin\s*\{document\}", re.IGNORECASE)
+_DOCUMENT_END = re.compile(r"\\end\s*\{document\}", re.IGNORECASE)
+_DOCUMENT_CLASS = re.compile(
+    r"\\documentclass(?:\s*\[[^]]*\])?\s*\{[^{}]*\}", re.IGNORECASE
+)
+_DOCUMENT_SHORTHAND = re.compile(r"\\document\s*\{[^{}]*\}", re.IGNORECASE)
+
 
 def _png_info(data: bytes) -> tuple[int, int, bool]:
     if len(data) < 33 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
@@ -66,11 +82,14 @@ class LatexRenderer:
     def render(self, math: str, block: bool) -> RenderedImage:
         if not self._latex or not self._dvipng:
             raise RenderError("latex and dvipng must both be installed")
+        math = math.replace("\r\n", "\n").replace("\r", "\n")
+        math, is_document = self._normalize_source(math)
         # Markdown renderers can introduce paragraph-like blank lines while
         # laying out a display equation. TeX rejects blank paragraphs in math
-        # mode, so reduce them to ordinary source line breaks.
-        math = math.replace("\r\n", "\n").replace("\r", "\n")
-        math = re.sub(r"\n[ \t]*\n+", "\n", math)
+        # mode, so reduce them to ordinary source line breaks. Real document
+        # bodies retain paragraph boundaries.
+        if not is_document:
+            math = re.sub(r"\n[ \t]*\n+", "\n", math)
         if not math.strip():
             raise RenderError("empty equation")
         if len(math.encode("utf-8")) > 16_384:
@@ -79,16 +98,19 @@ class LatexRenderer:
         if forbidden:
             raise RenderError(f"unsafe command {forbidden.group(0)!r}")
 
-        key = hashlib.sha256(f"{self.color}:{self.dpi}:{block}:{math}".encode()).hexdigest()
+        key = hashlib.sha256(
+            f"{self.color}:{self.dpi}:{block}:{is_document}:{math}".encode()
+        ).hexdigest()
         cached = self._cache.get(key)
         if cached is not None:
             return cached
 
-        body = self._math_body(math, block)
+        body = math.strip() if is_document else self._math_body(math, block)
+        template = _DOCUMENT_TEMPLATE if is_document else _TEMPLATE
         job = Path(self._tmp.name) / key
         job.mkdir()
         tex = job / "formula.tex"
-        tex.write_text(_TEMPLATE.replace("COLOR", self.color).replace("BODY", body), encoding="utf-8")
+        tex.write_text(template.replace("COLOR", self.color).replace("BODY", body), encoding="utf-8")
         env = os.environ.copy()
         env.update(
             {
@@ -155,6 +177,39 @@ class LatexRenderer:
         image = RenderedImage(data, width, height, has_alpha)
         self._cache[key] = image
         return image
+
+    @staticmethod
+    def _normalize_source(source: str) -> tuple[str, bool]:
+        """Extract a complete document's body without trusting its preamble."""
+        stripped = source.strip()
+        fence = re.fullmatch(r"```(?:latex|tex)?\s*\n(.*?)\n```", stripped, re.DOTALL | re.IGNORECASE)
+        if fence:
+            stripped = fence.group(1).strip()
+
+        begin = _DOCUMENT_BEGIN.search(stripped)
+        if begin:
+            end = _DOCUMENT_END.search(stripped, begin.end())
+            if not end:
+                raise RenderError("incomplete LaTeX document")
+            trailing = stripped[end.end() :].strip()
+            if trailing and trailing != "```":
+                raise RenderError("content after \\end{document}")
+            return stripped[begin.end() : end.start()].strip(), True
+
+        # Some model responses use the invalid shorthand \document{article}
+        # as though it were \documentclass{article}. Treat it as container
+        # metadata, but only when an explicit document end makes the boundary
+        # unambiguous.
+        shorthand = _DOCUMENT_SHORTHAND.search(stripped)
+        if shorthand:
+            end = _DOCUMENT_END.search(stripped, shorthand.end())
+            if not end:
+                raise RenderError("incomplete LaTeX document shorthand")
+            return stripped[shorthand.end() : end.start()].strip(), True
+
+        if _DOCUMENT_CLASS.search(stripped) or _DOCUMENT_END.search(stripped):
+            raise RenderError("incomplete LaTeX document")
+        return stripped, False
 
     @staticmethod
     def _math_body(math: str, block: bool) -> str:
