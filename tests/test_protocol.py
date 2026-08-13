@@ -53,6 +53,20 @@ class ProtocolTests(unittest.TestCase):
         encoded = KittyGraphics(TerminalGeometry()).delete(42)
         self.assertEqual(encoded, b"\x1b_Ga=d,d=I,q=2,i=42;\x1b\\")
 
+    @patch.dict(os.environ, {}, clear=True)
+    def test_virtual_placement_and_placeholder_cells(self):
+        image = RenderedImage(b"x", width=20, height=20, has_alpha=True)
+        protocol = KittyGraphics(TerminalGeometry(80, 24, 10, 20))
+        encoded, image_id, columns, rows = protocol.encode_virtual(
+            image, block=True, row_limit=2, column_limit=10
+        )
+        self.assertEqual((image_id, columns, rows), (1, 4, 2))
+        self.assertIn(b",U=1;", encoded)
+        placeholders = protocol.placeholder_row(image_id, 1, columns)
+        self.assertEqual(placeholders.count("\U0010eeee".encode()), columns)
+        self.assertIn("\u030d\u0305".encode(), placeholders)
+        self.assertIn("\u030d\u030d".encode(), placeholders)
+
 
 if __name__ == "__main__":
     unittest.main()

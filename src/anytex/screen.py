@@ -33,6 +33,8 @@ class EquationRegion:
 class _Placement:
     region: EquationRegion
     image_id: int
+    columns: int
+    rows: int
 
 
 _NORMALIZED_INLINE = re.compile(r"\((\\[A-Za-z]+(?:[^()]|\\[()])*)\)")
@@ -238,15 +240,34 @@ class ScreenLatexOverlay:
         dirty = set(self.screen.dirty)
         commands = bytearray()
         retained: dict[EquationRegion, _Placement] = {}
-
-        for region, placement in self._placements.items():
-            if region in regions and region.rows.isdisjoint(dirty):
-                retained[region] = placement
-            else:
-                commands.extend(self.graphics.delete(placement.image_id))
+        available = list(self._placements.values())
 
         for region in sorted(regions, key=lambda item: (item.row, item.column, item.block)):
-            if region in retained or region in self._failed:
+            placement = next(
+                (
+                    item
+                    for item in available
+                    if item.region.math == region.math and item.region.block == region.block
+                ),
+                None,
+            )
+            if placement is not None:
+                available.remove(placement)
+                if region == placement.region and region.rows.isdisjoint(dirty):
+                    retained[region] = placement
+                    continue
+                # Placeholder cells are terminal text: scrolling already moved
+                # them. Repaint the same cells/ID when the TUI dirtied them,
+                # without deleting the virtual image that may also be
+                # referenced from scrollback.
+                commands.extend(self._placeholders(
+                    region, placement.image_id, placement.columns, placement.rows
+                ))
+                retained[region] = _Placement(
+                    region, placement.image_id, placement.columns, placement.rows
+                )
+                continue
+            if region in self._failed:
                 continue
             try:
                 image = self.renderer.render(region.math, region.block)
@@ -256,9 +277,7 @@ class ScreenLatexOverlay:
                     self.on_error(exc)
                 continue
 
-            commands.extend(self._clear(region))
-            commands.extend(self._move(region.row, region.column))
-            encoded, image_id, _columns, _rows = self.graphics.encode_at(
+            encoded, image_id, columns, rows = self.graphics.encode_virtual(
                 image,
                 block=region.block,
                 row_limit=region.height if region.block else 1,
@@ -269,8 +288,13 @@ class ScreenLatexOverlay:
                 ),
             )
             commands.extend(encoded)
-            retained[region] = _Placement(region, image_id)
+            commands.extend(self._placeholders(region, image_id, columns, rows))
+            retained[region] = _Placement(region, image_id, columns, rows)
 
+        # Unmatched placements are intentionally forgotten without a graphics
+        # deletion command. Their placeholder cells were either overwritten by
+        # the child or moved into terminal scrollback, where they must retain
+        # access to their virtual image data.
         self._placements = retained
         self.screen.dirty.clear()
         return bytes(commands)
@@ -293,4 +317,17 @@ class ScreenLatexOverlay:
         for row, column, width in region.spans:
             result.extend(self._move(row, column))
             result.extend(b" " * width)
+        return bytes(result)
+
+    def _placeholders(
+        self,
+        region: EquationRegion,
+        image_id: int,
+        columns: int,
+        rows: int,
+    ) -> bytes:
+        result = bytearray(self._clear(region))
+        for image_row in range(rows):
+            result.extend(self._move(region.row + image_row, region.column))
+            result.extend(self.graphics.placeholder_row(image_id, image_row, columns))
         return bytes(result)

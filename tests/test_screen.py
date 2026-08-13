@@ -90,7 +90,10 @@ class ScreenOverlayTests(unittest.TestCase):
             b"\x1b[?2026h\x1b[5;3H[\x1b[6;3H\\rho\x1b[7;3H]\x1b[?2026l"
         )
         output = self.overlay.feed(b"\x1b[?2026h\x1b[5;3H\x1b[2K\x1b[?2026l")
-        self.assertIn(b"a=d,d=I", output)
+        # The child overwrites the placeholder cells. Do not delete the
+        # virtual image because older cells may reference it from scrollback.
+        self.assertNotIn(b"a=d,d=I", output)
+        self.assertNotIn("\U0010eeee".encode(), output)
 
     def test_resize_updates_virtual_grid(self):
         self.overlay.resize(120, 40)
@@ -109,9 +112,8 @@ class ScreenOverlayTests(unittest.TestCase):
         output = self.overlay.feed(equation + erase)
         image = output.index(b"_Ga=T,f=100")
         second = output.index(b"SECOND")
-        deletion = output.index(b"a=d,d=I")
         self.assertLess(image, second)
-        self.assertLess(second, deletion)
+        self.assertNotIn(b"a=d,d=I", output)
         self.assertEqual(output.count(b"\x1b[?2026l"), 2)
 
     def test_split_frame_boundary_is_not_forwarded_before_overlay(self):
@@ -125,7 +127,7 @@ class ScreenOverlayTests(unittest.TestCase):
         self.assertIn(b"_Ga=T,f=100", second)
         self.assertLess(second.index(b"_Ga=T,f=100"), second.index(b"\x1b[?2026l"))
 
-    def test_scroll_deletes_and_repositions_image_atomically(self):
+    def test_scroll_repositions_placeholder_image_atomically(self):
         self.overlay.feed(
             b"\x1b[?2026h\x1b[5;3H[\x1b[6;3H\\rho\x1b[7;3H]"
             b"\x1b[?2026l"
@@ -136,11 +138,11 @@ class ScreenOverlayTests(unittest.TestCase):
         output = self.overlay.feed(
             b"\x1b[?2026h\x1b[4;20r\x1b[4;1H\x1bM\x1b[?2026l"
         )
-        deletion = output.index(b"a=d,d=I")
-        placement = output.index(b"_Ga=T,f=100")
+        placeholder = output.index("\U0010eeee".encode())
         commit = output.index(b"\x1b[?2026l")
-        self.assertLess(deletion, placement)
-        self.assertLess(placement, commit)
+        self.assertNotIn(b"a=d,d=I", output)
+        self.assertNotIn(b"_Ga=T,f=100", output)
+        self.assertLess(placeholder, commit)
         self.assertIn(b"\x1b[6;3H", output)
 
 

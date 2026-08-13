@@ -82,13 +82,15 @@ apparently linear response is assembled through many disjoint screen updates.
 
 Synchronized updates are processed as true frame boundaries even when several
 frames arrive in one PTY read or a boundary escape is split across reads. Image
-deletion, scrolling, source clearing, and replacement placement are inserted into
+placeholder updates, scrolling, source clearing, and placement are inserted into
 the same atomic frame, preventing stale overlays from flashing at old coordinates.
 
 A completed fragment is compiled in a temporary directory with shell escape
-disabled, converted by `dvipng`, base64 chunked, and emitted as a positioned Kitty
-image. Images are deleted and redrawn when the application repaints their cells.
-The older append-only byte parser remains available as `--parser stream`.
+disabled, converted by `dvipng`, and transmitted as a Kitty virtual image.
+U+10EEEE Unicode placeholder cells attach that image to the terminal's text grid.
+The placeholders therefore move through scrolling and scrollback with surrounding
+text; repainting a cell naturally replaces its image. The older append-only byte
+parser remains available as `--parser stream`.
 
 ## Delimiter behavior
 
@@ -125,9 +127,9 @@ for hostile multi-tenant input.
 
 Terminal images are cell placements, not font glyphs. Selection and copy/paste
 therefore operate on the surrounding terminal text, not the equation pixels.
-Full-screen applications can repaint or scroll an image's cells at any time.
-Anytex tracks the reconstructed grid and redraws affected placements, but unusual
-terminal extensions that `pyte` does not emulate may still cause temporary drift.
+Full-screen applications can repaint an image's cells at any time. Anytex tracks
+the reconstructed grid and restores affected placeholders, but unusual terminal
+extensions that `pyte` does not emulate may still cause temporary drift.
 
 Inside tmux, anytex wraps graphics escapes for tmux passthrough. tmux may need
 `set -g allow-passthrough on` in `~/.tmux.conf`.
