@@ -47,6 +47,31 @@ anytex -- claude
 anytex -- python -q
 ```
 
+### Experimental browser companion
+
+Browser mode leaves the main terminal completely unchanged and mirrors the raw
+PTY output to a read-only localhost page. The page reconstructs the terminal
+with xterm.js and renders detected equations with KaTeX:
+
+```sh
+anytex --browser -- codex
+anytex --browser -- claude
+```
+
+Open the token-bearing URL printed at startup. Keyboard input remains in the
+main terminal; the browser is deliberately a companion rather than a second
+interactive client. Use a fixed port when helpful for browser automation:
+
+```sh
+anytex --browser --browser-port 8765 -- codex
+```
+
+The server binds only to `127.0.0.1`, and its live event stream requires the
+random per-run token in the printed URL. Keep that URL private: the browser view
+can contain the full terminal conversation. This mode does not send Kitty
+graphics escapes, placeholder characters, or any other modified output to the
+main terminal.
+
 For a dark terminal, the default near-white equation color is appropriate. For
 a light terminal, choose a dark color:
 

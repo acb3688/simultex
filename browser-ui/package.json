@@ -1,0 +1,14 @@
+{
+  "name": "anytex-browser-ui",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --format=esm --minify --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --outfile=../src/anytex/browser_assets/app.js"
+  },
+  "dependencies": {
+    "@xterm/xterm": "^6.0.0",
+    "katex": "^0.16.22"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

@@ -1,0 +1,108 @@
+:root {
+  color-scheme: dark;
+  --terminal-background: #242830;
+  --terminal-foreground: #e7e9ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+body {
+  display: grid;
+  grid-template-rows: 34px minmax(0, 1fr);
+}
+
+header {
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid #3a414d;
+  background: #1c2027;
+  color: #aeb5c1;
+  font-size: 12px;
+}
+
+.brand {
+  color: #f0f2f6;
+  font-weight: 700;
+}
+
+.mode {
+  margin-left: auto;
+}
+
+.live {
+  color: #70d68b;
+}
+
+.error {
+  color: #ff7b72;
+}
+
+#terminal-host {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--terminal-background);
+}
+
+#terminal,
+#terminal > .xterm {
+  width: 100%;
+  height: 100%;
+}
+
+#terminal .xterm-viewport {
+  background-color: var(--terminal-background) !important;
+}
+
+#terminal {
+  padding: 8px;
+}
+
+#math-overlays {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.math-region {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: visible;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+}
+
+.math-region.block {
+  justify-content: flex-start;
+  padding: 0 0.25rem;
+}
+
+.math-region.inline {
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.math-region .katex-display {
+  margin: 0;
+  text-align: left;
+}

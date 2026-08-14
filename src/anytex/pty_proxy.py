@@ -22,6 +22,11 @@ class StreamTransform(Protocol):
     def finish(self) -> bytes: ...
 
 
+class StreamObserver(Protocol):
+    def feed(self, data: bytes) -> None: ...
+    def resize(self, columns: int, rows: int) -> None: ...
+
+
 def _write_all(fd: int, data: bytes) -> None:
     while data:
         try:
@@ -52,10 +57,23 @@ def _resize_transform(transform: StreamTransform | None, fd: int) -> None:
         resize(columns, rows)
 
 
+def _resize_observer(observer: StreamObserver | None, fd: int) -> None:
+    if observer is None:
+        return
+    try:
+        packed = fcntl.ioctl(fd, termios.TIOCGWINSZ, b"\0" * 8)
+        rows, columns, _xpixel, _ypixel = struct.unpack("HHHH", packed)
+    except OSError:
+        return
+    if rows and columns:
+        observer.resize(columns, rows)
+
+
 def run_proxy(
     command: Sequence[str],
     transform: StreamTransform | None,
     raw_output: BinaryIO | None = None,
+    observer: StreamObserver | None = None,
 ) -> int:
     pid, master = pty.fork()
     if pid == 0:
@@ -69,6 +87,7 @@ def run_proxy(
     output_fd = sys.stdout.fileno()
     _copy_window_size(input_fd, master)
     _resize_transform(transform, input_fd)
+    _resize_observer(observer, input_fd)
     old_tty = None
     if os.isatty(input_fd):
         old_tty = termios.tcgetattr(input_fd)
@@ -80,6 +99,7 @@ def run_proxy(
     def resize(_signum: int, _frame: FrameType | None) -> None:
         _copy_window_size(input_fd, master)
         _resize_transform(transform, input_fd)
+        _resize_observer(observer, input_fd)
 
     def forward(signum: int, _frame: FrameType | None) -> None:
         try:
@@ -120,6 +140,8 @@ def run_proxy(
                 if raw_output is not None:
                     raw_output.write(data)
                     raw_output.flush()
+                if observer is not None:
+                    observer.feed(data)
                 _write_all(output_fd, transform.feed(data) if transform else data)
         if transform:
             _write_all(output_fd, transform.finish())

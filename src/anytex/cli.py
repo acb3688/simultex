@@ -9,8 +9,9 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .browser import BrowserCompanion
 from .protocol import KittyGraphics, TerminalGeometry, supports_kitty_graphics
-from .pty_proxy import StreamTransform, run_proxy
+from .pty_proxy import StreamObserver, StreamTransform, run_proxy
 from .render import LatexRenderer, RenderError
 from .screen import ScreenLatexOverlay
 from .stream import LatexStreamParser
@@ -81,6 +82,18 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="capture the child's raw PTY output for diagnosis (refuses to overwrite)",
     )
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="mirror unchanged output to a read-only localhost browser with rendered LaTeX",
+    )
+    parser.add_argument(
+        "--browser-port",
+        type=int,
+        default=0,
+        metavar="PORT",
+        help="localhost port for --browser (default: choose an available port)",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER, help="command to run")
     return parser
 
@@ -131,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("anytex: --inline-rows must be between 1 and 4")
     if not 1 <= args.max_rows <= 50:
         raise SystemExit("anytex: --max-rows must be between 1 and 50")
+    if not 0 <= args.browser_port <= 65535:
+        raise SystemExit("anytex: --browser-port must be between 0 and 65535")
     if args.keep_latex and args.parser == "screen":
         raise SystemExit("anytex: --keep-latex requires --parser stream")
     if args.check:
@@ -141,6 +156,23 @@ def main(argv: list[str] | None = None) -> int:
     if not command:
         build_parser().print_help(sys.stderr)
         return 2
+
+    if args.browser:
+        try:
+            companion = BrowserCompanion(
+                args.browser_port,
+                parse_dollars=not args.no_dollar,
+            )
+        except OSError as exc:
+            raise SystemExit(f"anytex: cannot start browser companion: {exc}") from None
+        with companion:
+            print(f"anytex: browser companion: {companion.url}", file=sys.stderr)
+            return _run(
+                command,
+                transform=None,
+                capture_path=args.capture_raw,
+                observer=companion,
+            )
 
     enabled = _graphics_enabled(args.graphics)
     if not enabled:
@@ -195,9 +227,14 @@ def main(argv: list[str] | None = None) -> int:
         renderer.close()
 
 
-def _run(command: list[str], transform: StreamTransform | None, capture_path: Path | None) -> int:
+def _run(
+    command: list[str],
+    transform: StreamTransform | None,
+    capture_path: Path | None,
+    observer: StreamObserver | None = None,
+) -> int:
     if capture_path is None:
-        return run_proxy(command, transform=transform)
+        return run_proxy(command, transform=transform, observer=observer)
     try:
         capture = capture_path.open("xb")
     except FileExistsError:
@@ -206,7 +243,7 @@ def _run(command: list[str], transform: StreamTransform | None, capture_path: Pa
         raise SystemExit(f"anytex: cannot create capture file {capture_path}: {exc}") from None
     print(f"anytex: capturing raw child output in {capture_path}", file=sys.stderr)
     try:
-        return run_proxy(command, transform=transform, raw_output=capture)
+        return run_proxy(command, transform=transform, raw_output=capture, observer=observer)
     finally:
         capture.close()
 

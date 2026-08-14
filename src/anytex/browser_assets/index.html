@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="anytex-config" content="__ANYTEX_CONFIG__">
+    <title>AnyTeX Browser Companion</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <header>
+      <span class="brand">AnyTeX</span>
+      <span id="status">Connecting…</span>
+      <span class="mode">read-only companion</span>
+    </header>
+    <main id="terminal-host">
+      <div id="terminal"></div>
+      <div id="math-overlays" aria-hidden="true"></div>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
