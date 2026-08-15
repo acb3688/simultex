@@ -12,6 +12,19 @@ test("repairs a collapsed matrix row separator", () => {
   );
 });
 
+test("repairs compact collapsed numeric matrix separators", () => {
+  const source = String.raw`\begin{bmatrix}3\2\end{bmatrix} + \begin{bmatrix}1\-4\end{bmatrix}`;
+
+  assert.equal(
+    normalizeTerminalMath(source),
+    String.raw`\begin{bmatrix}3 \\ 2\end{bmatrix} + \begin{bmatrix}1 \\ -4\end{bmatrix}`,
+  );
+  assert.equal(
+    normalizeTerminalMath(String.raw`\begin{bmatrix}3\alpha\end{bmatrix}`),
+    String.raw`\begin{bmatrix}3\alpha\end{bmatrix}`,
+  );
+});
+
 test("leaves intact matrix separators and ordinary TeX spacing alone", () => {
   const matrix = String.raw`\begin{pmatrix}a \\ b\end{pmatrix}`;
   assert.equal(normalizeTerminalMath(matrix), matrix);

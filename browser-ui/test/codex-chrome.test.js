@@ -29,6 +29,10 @@ test("recognizes Claude's composer suggestion and message markers", () => {
   assert.equal(hasAssistantMarker("⏺ Here is the answer"), true);
 });
 
+test("does not mistake a Markdown blockquote for a user prompt", () => {
+  assert.equal(hasPromptMarker("> Vectors represent things"), false);
+});
+
 test("dim and empty composer panels are transient", () => {
   assert.equal(isTransientComposer([row("› Explain something", true)]), true);
   assert.equal(isTransientComposer([row("")]), true);

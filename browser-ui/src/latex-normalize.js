@@ -6,6 +6,10 @@ const MATRIX_ENVIRONMENT = /\\begin\{(matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vma
 export function normalizeTerminalMath(math) {
   return math.replace(MATRIX_ENVIRONMENT, (environment, name, body) => {
     let repaired = body.replace(/(\S)[ \t]+\\\s+(?=\S)/g, "$1 \\\\ ");
+    // Compact numeric matrices can lose the same slash without retaining any
+    // whitespace, e.g. `3\2` or `1\-4`. Restrict this repair to numeric/sign
+    // cell starts so legitimate commands such as `3\alpha` remain untouched.
+    repaired = repaired.replace(/(\S)\\(?=[+-]?(?:\d|\.\d))/g, "$1 \\\\ ");
     const lines = repaired.split("\n").map((line) => line.trim()).filter(Boolean);
     if (lines.length > 1 && !repaired.includes("\\\\")) {
       repaired = ` ${lines.join(" \\\\ ")} `;

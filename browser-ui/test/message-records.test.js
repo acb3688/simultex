@@ -54,13 +54,9 @@ test("a shrinking live tail keeps updating after a submitted user message", () =
     candidate("assistant", "Working", 24),
     candidate("terminal", "model status", 26),
   ], 1, 0);
-  records = messages.update([
-    candidate("user", "Explain determinants", 20, 22),
-    candidate("assistant", "Working", 24),
-    candidate("terminal", "model status", 26),
-  ], 1, 121);
 
-  assert.equal(messages.startRow, 23);
+  assert.equal(messages.startRow, 20);
+  assert.equal(records[0].frozen, true);
   const response = records[1];
   assert.equal(response.source, "Working");
 
@@ -122,4 +118,45 @@ test("a repaint resets the freeze window before a response is committed", () => 
   ], 1, 242);
   assert.equal(records[0].frozen, true);
   assert.match(records[0].source, /^Opening sentence/);
+});
+
+test("a submitted user message is committed before its rows are repainted", () => {
+  const messages = new MessageRecords();
+
+  const recordsBeforeSubmit = messages.update([
+    candidate("assistant", "Earlier response", 10, 19),
+    candidate("terminal", "Explain determinants", 20, 22, "user"),
+  ], 0);
+  const response = recordsBeforeSubmit[0];
+  const draft = recordsBeforeSubmit[1];
+
+  const recordsOnSubmit = messages.update([
+    candidate("assistant", "Earlier response", 10, 19),
+    candidate("user", "Explain determinants", 20, 22),
+    candidate("terminal", "› Implement {feature}", 20, 22),
+  ], 2, 0);
+
+  assert.strictEqual(recordsOnSubmit[0], response);
+  assert.strictEqual(recordsOnSubmit[1], draft);
+  assert.deepEqual(recordsOnSubmit.slice(0, 2).map((record) => record.frozen), [true, true]);
+  assert.deepEqual(recordsOnSubmit.slice(0, 2).map((record) => record.kind), ["assistant", "user"]);
+  assert.equal(recordsOnSubmit[1].source, "Explain determinants");
+  assert.equal(messages.startRow, 20);
+
+  const recordsWhileStillPainted = messages.update([
+    candidate("user", "Explain determinants", 20, 22),
+    candidate("terminal", "› Implement {feature}", 20, 22),
+  ], 1, 20);
+  assert.deepEqual(
+    recordsWhileStillPainted.filter((record) => record.kind === "user")
+      .map((record) => record.source),
+    ["Explain determinants"],
+  );
+
+  const recordsAfterRepaint = messages.update([
+    candidate("assistant", "A determinant measures signed volume.", 20, 25),
+  ], 0);
+  assert.strictEqual(recordsAfterRepaint[0], response);
+  assert.strictEqual(recordsAfterRepaint[1], draft);
+  assert.equal(recordsAfterRepaint[2].kind, "assistant");
 });

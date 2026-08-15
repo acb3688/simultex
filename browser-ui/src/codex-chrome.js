@@ -7,7 +7,7 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 export function hasPromptMarker(text) {
-  return /^[›❯>]\s?/.test(text.trimStart());
+  return /^[›❯]\s?/.test(text.trimStart());
 }
 
 export function hasAssistantMarker(text) {
@@ -19,7 +19,7 @@ export function panelText(rows) {
     .map((row) => row.text.trim())
     .filter(Boolean)
     .join("\n")
-    .replace(/^[›❯>]\s?/, "")
+    .replace(/^[›❯]\s?/, "")
     .trim();
 }
 
@@ -48,7 +48,7 @@ function dimCharacterRatio(rows) {
   let total = 0;
   for (const row of rows) {
     for (const fragment of row.fragments) {
-      const meaningful = fragment.text.replace(/\s/g, "").replace(/[›❯>]/g, "");
+      const meaningful = fragment.text.replace(/\s/g, "").replace(/[›❯]/g, "");
       total += meaningful.length;
       if (fragment.style.dim) dim += meaningful.length;
     }

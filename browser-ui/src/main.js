@@ -447,7 +447,7 @@ function markdownSource(rows, kind) {
   const first = normalized.findIndex((line) => line.trim());
   if (first >= 0) {
     normalized[first] = kind === "user"
-      ? normalized[first].replace(/^\s*[›❯>]\s?/, "")
+      ? normalized[first].replace(/^\s*[›❯]\s?/, "")
       : normalized[first].replace(/^\s*[•·●⏺]\s?/, "");
   }
   return normalized.join("\n").trim();
@@ -600,7 +600,7 @@ function messageModel(kind, start, end, cursorRow, excludedRows) {
 function terminalModel(start, end, excludedRows, panel = false, messageRole) {
   const rows = filteredRows(start, end, excludedRows, true);
   if (!rows.some((row) => row.text.trim())) return undefined;
-  return {
+  const model = {
     key: `${bufferType}:${start}:terminal`,
     kind: "terminal",
     messageRole,
@@ -610,6 +610,11 @@ function terminalModel(start, end, excludedRows, panel = false, messageRole) {
     panel,
     signature: `terminal:${Number(panel)}:${rangeSignature(rows)}`,
   };
+  if (messageRole === "user") {
+    model.source = markdownSource(rows, "user");
+    model.background = rangeBackground(rows);
+  }
+  return model;
 }
 
 function pushModel(models, model) {
