@@ -56,6 +56,7 @@ class BrowserCompanionTests(unittest.TestCase):
         self.assertIn("parseDollars", body)
         self.assertIn("false", body)
         self.assertIn('id="transcript"', body)
+        self.assertIn('id="download-html"', body)
         self.assertNotIn("math-overlays", body)
         self.assertEqual("127.0.0.1", companion._server.server_address[0])
 

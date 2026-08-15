@@ -69,6 +69,12 @@ interactive client. Use a fixed port when helpful for browser automation:
 anytex --browser --browser-port 8765 -- codex
 ```
 
+Use **Download HTML** in the companion header to save the current transcript as
+a static, self-contained snapshot. The export embeds its CSS and KaTeX fonts,
+removes the live connection and access token, and records each block's original
+Markdown source, terminal row bounds, role, frozen state, and render signature
+as `data-*` attributes for later diagnosis.
+
 The server binds only to `127.0.0.1`, and its live event stream requires the
 random per-run token in the printed URL. Keep that URL private: the browser view
 can contain the full terminal conversation. This mode does not send Kitty

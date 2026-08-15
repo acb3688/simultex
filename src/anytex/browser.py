@@ -211,6 +211,7 @@ class BrowserCompanion:
                     ".css": "text/css; charset=utf-8",
                     ".woff2": "font/woff2",
                     ".woff": "font/woff",
+                    ".ttf": "font/ttf",
                 }
                 content_type = types.get(path.suffix)
                 if content_type is None:

@@ -9,6 +9,7 @@ import {
   isUserPanel,
   rememberPromptBackground,
 } from "./codex-chrome.js";
+import { downloadSnapshot } from "./html-export.js";
 import { normalizeTerminalMath } from "./latex-normalize.js";
 import { MessageRecords } from "./message-records.js";
 import "./style.css";
@@ -28,6 +29,7 @@ const config = configElement ? JSON.parse(configElement.content) : {};
 const params = new URLSearchParams(window.location.search);
 const token = params.get("token");
 const status = document.querySelector("#status");
+const downloadButton = document.querySelector("#download-html");
 const scroller = document.querySelector("#transcript-host");
 const transcript = document.querySelector("#transcript");
 
@@ -790,6 +792,32 @@ function renderTranscript() {
   // If the candidate changed during the settle pass, give it another bounded
   // pass. This self-flushes the final repaint without polling forever.
   if (models.length && messageRecords.pendingFreeze) scheduleSettledRender();
+}
+
+if (downloadButton) {
+  downloadButton.disabled = false;
+  downloadButton.addEventListener("click", async () => {
+    const previousLabel = downloadButton.textContent;
+    downloadButton.disabled = true;
+    downloadButton.textContent = "Preparing…";
+    try {
+      await downloadSnapshot(
+        document,
+        [...messageRecords.committed, ...messageRecords.live],
+      );
+    } catch (error) {
+      console.error("Could not export AnyTeX transcript", error);
+      downloadButton.textContent = "Export failed";
+      window.setTimeout(() => {
+        downloadButton.textContent = previousLabel;
+      }, 2_000);
+    } finally {
+      downloadButton.disabled = false;
+      if (downloadButton.textContent === "Preparing…") {
+        downloadButton.textContent = previousLabel;
+      }
+    }
+  });
 }
 
 if (!token) {

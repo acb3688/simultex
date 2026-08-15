@@ -48,6 +48,26 @@ header {
   margin-left: auto;
 }
 
+#download-html {
+  padding: 3px 9px;
+  border: 1px solid #525b69;
+  border-radius: 4px;
+  background: #292f38;
+  color: #d8dce4;
+  font: inherit;
+  cursor: pointer;
+}
+
+#download-html:hover:not(:disabled) {
+  border-color: #73c9d2;
+  color: #f0f2f6;
+}
+
+#download-html:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .live {
   color: #70d68b;
 }
