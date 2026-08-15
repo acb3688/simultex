@@ -27,7 +27,9 @@ test("repairs compact collapsed numeric matrix separators", () => {
 
 test("leaves intact matrix separators and ordinary TeX spacing alone", () => {
   const matrix = String.raw`\begin{pmatrix}a \\ b\end{pmatrix}`;
+  const compactNumericMatrix = String.raw`\begin{bmatrix}3\\2\end{bmatrix}`;
   assert.equal(normalizeTerminalMath(matrix), matrix);
+  assert.equal(normalizeTerminalMath(compactNumericMatrix), compactNumericMatrix);
   assert.equal(normalizeTerminalMath(String.raw`x\ y`), String.raw`x\ y`);
 });
 

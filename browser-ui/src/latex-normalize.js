@@ -9,7 +9,7 @@ export function normalizeTerminalMath(math) {
     // Compact numeric matrices can lose the same slash without retaining any
     // whitespace, e.g. `3\2` or `1\-4`. Restrict this repair to numeric/sign
     // cell starts so legitimate commands such as `3\alpha` remain untouched.
-    repaired = repaired.replace(/(\S)\\(?=[+-]?(?:\d|\.\d))/g, "$1 \\\\ ");
+    repaired = repaired.replace(/([^\\\s])\\(?=[+-]?(?:\d|\.\d))/g, "$1 \\\\ ");
     let lines = repaired.split("\n").map((line) => line.trim()).filter(Boolean);
     if (lines.length > 1 && !repaired.includes("\\\\")) {
       lines = lines.map((line, index) => (

@@ -43,15 +43,18 @@ const terminal = new Terminal({
   scrollback: 20_000,
 });
 
-function renderKatex(math, displayMode, source, escapeHtml) {
+function renderKatex(math, displayMode, source, escapeHtml, repairTerminalMath) {
   try {
-    return katex.renderToString(normalizeTerminalMath(math), {
-      displayMode,
-      throwOnError: true,
-      strict: "ignore",
-      trust: false,
-      output: "htmlAndMathml",
-    });
+    return katex.renderToString(
+      repairTerminalMath ? normalizeTerminalMath(math) : math,
+      {
+        displayMode,
+        throwOnError: true,
+        strict: "ignore",
+        trust: false,
+        output: "htmlAndMathml",
+      },
+    );
   } catch {
     const className = displayMode ? "math-source" : "math-source-inline";
     const tag = displayMode ? "pre" : "span";
@@ -59,7 +62,7 @@ function renderKatex(math, displayMode, source, escapeHtml) {
   }
 }
 
-function mathMarkdownPlugin(md) {
+function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
   const escapeHtml = md.utils.escapeHtml;
 
   function looksLikeMath(content) {
@@ -223,11 +226,18 @@ function mathMarkdownPlugin(md) {
       true,
       token.meta.source,
       escapeHtml,
+      repairTerminalMath,
     )}</div>\n`;
   };
   md.renderer.rules.math_inline = (tokens, index) => {
     const token = tokens[index];
-    return renderKatex(token.content, false, token.meta.source, escapeHtml);
+    return renderKatex(
+      token.content,
+      false,
+      token.meta.source,
+      escapeHtml,
+      repairTerminalMath,
+    );
   };
   md.renderer.rules.math_inline_display = (tokens, index) => {
     const token = tokens[index];
@@ -236,16 +246,22 @@ function mathMarkdownPlugin(md) {
       true,
       token.meta.source,
       escapeHtml,
+      repairTerminalMath,
     )}</span>`;
   };
 }
 
-const markdown = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-  breaks: false,
-}).use(mathMarkdownPlugin);
+function createMarkdown(repairTerminalMath) {
+  return new MarkdownIt({
+    html: false,
+    linkify: true,
+    typographer: true,
+    breaks: false,
+  }).use(mathMarkdownPlugin, { repairTerminalMath });
+}
+
+const apiMarkdown = createMarkdown(false);
+const terminalMarkdown = createMarkdown(true);
 
 let snapshots = [];
 let bufferType;
@@ -734,7 +750,10 @@ function renderModel(node, model) {
   if (model.kind === "user" && model.background) {
     node.style.backgroundColor = model.background;
   }
-  if (model.source) node.innerHTML = markdown.render(model.source);
+  if (model.source) {
+    const renderer = model.authoritative ? apiMarkdown : terminalMarkdown;
+    node.innerHTML = renderer.render(model.source);
+  }
   else node.textContent = "\u00a0";
 }
 
