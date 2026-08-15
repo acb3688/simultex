@@ -405,6 +405,11 @@ def _request_details(provider: str, payload: dict[str, Any]) -> tuple[str | None
             isinstance(part, dict) and part.get("type") == "tool_result"
             for part in content
         ):
+            current_text = _content_text(content, {"text"})
+            if current_text is not None:
+                cleaned = _strip_anthropic_system_messages(current_text)
+                if cleaned:
+                    return cleaned, False
             for prior in reversed(messages[:index]):
                 if not isinstance(prior, dict) or prior.get("role") != "user":
                     continue

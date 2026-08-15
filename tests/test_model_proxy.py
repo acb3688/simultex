@@ -134,6 +134,56 @@ class RequestClassificationTests(unittest.TestCase):
             ("Show a matrix", True),
         )
 
+    def test_anthropic_text_beside_an_interrupted_tool_starts_a_new_turn(self) -> None:
+        self.assertEqual(
+            _request_details(
+                "anthropic",
+                {
+                    "messages": [
+                        {"role": "user", "content": "Write this to a file"},
+                        {"role": "assistant", "content": "Using a tool"},
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "content": "The user interrupted this tool",
+                                    "is_error": True,
+                                },
+                                {"type": "text", "text": "Just show it here instead"},
+                            ],
+                        },
+                    ]
+                },
+            ),
+            ("Just show it here instead", False),
+        )
+
+    def test_anthropic_system_context_beside_a_tool_remains_a_continuation(self) -> None:
+        reminder = """<system-reminder>
+Internal context
+</system-reminder>"""
+
+        self.assertEqual(
+            _request_details(
+                "anthropic",
+                {
+                    "messages": [
+                        {"role": "user", "content": "Original prompt"},
+                        {"role": "assistant", "content": "Using a tool"},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "tool_result", "content": "done"},
+                                {"type": "text", "text": reminder},
+                            ],
+                        },
+                    ]
+                },
+            ),
+            ("Original prompt", True),
+        )
+
     def test_anthropic_auxiliary_prompts_are_recognized(self) -> None:
         title_prompt = """<session>
 User request
