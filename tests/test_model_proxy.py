@@ -13,7 +13,9 @@ from anytex.model_proxy import (
     TranscriptCoordinator,
     _AnthropicObserver,
     _OpenAIObserver,
+    _is_anthropic_auxiliary_request,
     _request_details,
+    _strip_anthropic_system_messages,
     detect_provider,
     route_child,
     validate_upstream,
@@ -112,6 +114,58 @@ class RequestClassificationTests(unittest.TestCase):
                 },
             ),
             (None, True),
+        )
+
+    def test_anthropic_tool_result_recovers_the_original_user_message(self) -> None:
+        self.assertEqual(
+            _request_details(
+                "anthropic",
+                {
+                    "messages": [
+                        {"role": "user", "content": "Show a matrix"},
+                        {"role": "assistant", "content": "Using a tool"},
+                        {
+                            "role": "user",
+                            "content": [{"type": "tool_result", "content": "done"}],
+                        },
+                    ]
+                },
+            ),
+            ("Show a matrix", True),
+        )
+
+    def test_anthropic_auxiliary_prompts_are_recognized(self) -> None:
+        title_prompt = """<session>
+User request
+</session>
+
+Write the title in the predominant language of the session"""
+
+        self.assertTrue(_is_anthropic_auxiliary_request("quota"))
+        self.assertTrue(_is_anthropic_auxiliary_request(title_prompt))
+        self.assertTrue(
+            _is_anthropic_auxiliary_request(
+                "[SUGGESTION MODE: Suggest what the user might naturally type next "
+                "into Claude Code.]\n\nReply with ONLY the suggestion."
+            )
+        )
+        self.assertFalse(_is_anthropic_auxiliary_request("Explain session handling"))
+
+    def test_anthropic_system_reminders_are_removed_from_user_text(self) -> None:
+        source = """<system-reminder>
+# currentDate
+Today's date is 2026-08-15.
+</system-reminder>
+
+Yo"""
+
+        self.assertEqual(_strip_anthropic_system_messages(source), "Yo")
+        self.assertEqual(
+            _request_details(
+                "anthropic",
+                {"messages": [{"role": "user", "content": source}]},
+            ),
+            ("Yo", False),
         )
 
 

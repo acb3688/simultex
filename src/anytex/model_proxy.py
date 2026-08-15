@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import secrets
 import socket
 import threading
@@ -395,16 +396,55 @@ def _request_details(provider: str, payload: dict[str, Any]) -> tuple[str | None
     messages = payload.get("messages")
     if not isinstance(messages, list) or not messages:
         return None, True
-    latest = messages[-1]
-    if not isinstance(latest, dict) or latest.get("role") != "user":
-        return None, True
-    content = latest.get("content")
-    if isinstance(content, list) and any(
-        isinstance(part, dict) and part.get("type") == "tool_result" for part in content
+    for index in range(len(messages) - 1, -1, -1):
+        message = messages[index]
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, list) and any(
+            isinstance(part, dict) and part.get("type") == "tool_result"
+            for part in content
+        ):
+            for prior in reversed(messages[:index]):
+                if not isinstance(prior, dict) or prior.get("role") != "user":
+                    continue
+                text = _content_text(prior.get("content"), {"text"})
+                if text is not None:
+                    cleaned = _strip_anthropic_system_messages(text)
+                    if cleaned:
+                        return cleaned, True
+            return None, True
+        text = _content_text(content, {"text"})
+        if text is None:
+            return None, True
+        cleaned = _strip_anthropic_system_messages(text)
+        return (cleaned, False) if cleaned else (None, True)
+    return None, True
+
+
+def _strip_anthropic_system_messages(user_markdown: str) -> str:
+    return re.sub(
+        r"<system-reminder(?:\s[^>]*)?>[\s\S]*?</system-reminder>\s*",
+        "",
+        user_markdown,
+    ).strip()
+
+
+def _is_anthropic_auxiliary_request(user_markdown: str | None) -> bool:
+    if user_markdown is None:
+        return False
+    stripped = user_markdown.strip()
+    if stripped == "quota":
+        return True
+    if stripped.startswith(
+        "[SUGGESTION MODE: Suggest what the user might naturally type next into Claude Code.]"
     ):
-        return None, True
-    text = _content_text(content, {"text"})
-    return (text, False) if text is not None else (None, True)
+        return True
+    return (
+        stripped.startswith("<session>")
+        and "</session>" in stripped
+        and "Write the title in the predominant language of the session" in stripped
+    )
 
 
 def _content_text(content: Any, accepted_types: set[str]) -> str | None:
@@ -615,6 +655,8 @@ class ModelApiProxy:
         if not isinstance(payload, dict):
             payload = {}
         user_markdown, continuation = _request_details(self.provider, payload)
+        if self.provider == "anthropic" and _is_anthropic_auxiliary_request(user_markdown):
+            return None, payload.get("stream") is True
         context = self.coordinator.begin_call(self.provider, user_markdown, continuation)
         return context, payload.get("stream") is True
 

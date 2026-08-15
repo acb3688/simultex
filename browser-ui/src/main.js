@@ -11,7 +11,7 @@ import {
   rememberPromptBackground,
 } from "./codex-chrome.js";
 import { downloadSnapshot } from "./html-export.js";
-import { normalizeTerminalMath } from "./latex-normalize.js";
+import { normalizeLatexFence, normalizeTerminalMath } from "./latex-normalize.js";
 import { MessageRecords } from "./message-records.js";
 import "./style.css";
 
@@ -64,6 +64,7 @@ function renderKatex(math, displayMode, source, escapeHtml, repairTerminalMath) 
 
 function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
   const escapeHtml = md.utils.escapeHtml;
+  const renderFence = md.renderer.rules.fence;
 
   function looksLikeMath(content) {
     return /\\[A-Za-z]+|[-_^=+*/<>]|\d\s*[A-Za-z]|[A-Za-z]\s*\d|[∑∏∫√∞≈≠≤≥±×÷·]/.test(content);
@@ -219,6 +220,21 @@ function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
   });
   md.inline.ruler.before("escape", "anytex_math_inline", mathInline);
   md.core.ruler.after("inline", "anytex_parenthesized_math", parenthesizedMath);
+  md.renderer.rules.fence = (tokens, index, options, environment, renderer) => {
+    const token = tokens[index];
+    const language = token.info.trim().split(/\s+/, 1)[0].toLowerCase();
+    if (!["latex", "tex"].includes(language)) {
+      return renderFence(tokens, index, options, environment, renderer);
+    }
+    const source = `\`\`\`${token.info}\n${token.content}\`\`\``;
+    return `<div class="math-display latex-fence">${renderKatex(
+      normalizeLatexFence(token.content.trim()),
+      true,
+      source,
+      escapeHtml,
+      repairTerminalMath,
+    )}</div>\n`;
+  };
   md.renderer.rules.math_block = (tokens, index) => {
     const token = tokens[index];
     return `<div class="math-display">${renderKatex(

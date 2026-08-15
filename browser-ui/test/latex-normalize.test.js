@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeTerminalMath } from "../src/latex-normalize.js";
+import {
+  normalizeLatexFence,
+  normalizeTerminalMath,
+} from "../src/latex-normalize.js";
+
+test("converts standalone align fences to a KaTeX-compatible environment", () => {
+  const source = "\\begin{align}\nx&=1 \\\\\ny&=2\n\\end{align}";
+  const expected = "\\begin{aligned}\nx&=1 \\\\\ny&=2\n\\end{aligned}";
+
+  assert.equal(normalizeLatexFence(source), expected);
+});
 
 test("repairs a collapsed matrix row separator", () => {
   const source = String.raw`2\begin{bmatrix}3 \ 2\end{bmatrix}`;

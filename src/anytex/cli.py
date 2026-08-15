@@ -6,6 +6,7 @@ import argparse
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from . import __version__
@@ -16,6 +17,9 @@ from .pty_proxy import StreamObserver, StreamTransform, run_proxy
 from .render import LatexRenderer, RenderError
 from .screen import ScreenLatexOverlay
 from .stream import LatexStreamParser
+
+
+_CLAUDE_BROWSER_GRACE_SECONDS = 10
 
 
 def _hex_color(value: str) -> str:
@@ -147,6 +151,23 @@ def _check(args: argparse.Namespace) -> int:
     return 0 if image.has_alpha else 1
 
 
+def _wait_for_browser_url(
+    provider: str,
+    *,
+    seconds: int = _CLAUDE_BROWSER_GRACE_SECONDS,
+    sleeper=time.sleep,
+) -> None:
+    if provider != "anthropic" or seconds <= 0:
+        return
+    print(
+        f"anytex: Claude starts in {seconds} seconds; "
+        "copy or open the browser companion URL now",
+        file=sys.stderr,
+        flush=True,
+    )
+    sleeper(seconds)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if not 50 <= args.dpi <= 600:
@@ -201,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
                             f"anytex: using authoritative {provider} API transcript events",
                             file=sys.stderr,
                         )
+                        _wait_for_browser_url(provider)
                         return _run(
                             routed_command,
                             transform=None,

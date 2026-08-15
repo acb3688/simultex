@@ -76,7 +76,9 @@ behavior or `--api-upstream URL` to override the upstream during development.
 
 Open the token-bearing URL printed at startup. Keyboard input remains in the
 main terminal; the browser is deliberately a companion rather than a second
-interactive client. Use a fixed port when helpful for browser automation:
+interactive client. Before Claude Code takes over the terminal, AnyTeX pauses
+for ten seconds and prints a reminder so there is time to copy or open this URL.
+Use a fixed port when helpful for browser automation:
 
 ```sh
 anytex --browser --browser-port 8765 -- codex
