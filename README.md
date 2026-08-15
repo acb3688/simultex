@@ -51,8 +51,10 @@ anytex -- python -q
 
 Browser mode leaves the main terminal completely unchanged and mirrors the raw
 PTY output to a read-only localhost page. xterm.js interprets the VT control
-stream without displaying its own terminal. AnyTeX projects that buffer into a
-normal scrollable HTML transcript and replaces detected equations with KaTeX:
+stream without displaying its own terminal. AnyTeX reconstructs user and
+assistant messages from that buffer, rejoins terminal-wrapped lines, and renders
+each message as Markdown. Headings, lists, tables, fenced code, emphasis, links,
+and KaTeX equations therefore share one normal scrollable HTML document:
 
 ```sh
 anytex --browser -- codex
@@ -73,12 +75,15 @@ can contain the full terminal conversation. This mode does not send Kitty
 graphics escapes, placeholder characters, or any other modified output to the
 main terminal.
 
-The browser is a rich transcript, not a pixel-perfect second terminal. ANSI
-colors and fixed-width layouts such as tables are preserved, while display math
-is allowed to take its natural height. Completed historical rows retain their
-DOM nodes as new output arrives. A formula being typed or streamed remains as
-source briefly and is promoted only after its closing delimiter is complete and
-stable; this prevents partial equations from flashing during generation.
+The browser is a rich transcript, not a pixel-perfect second terminal. AnyTeX
+uses Codex's full-width user panels and assistant markers as message boundaries;
+output that does not look like a message remains fixed-width terminal HTML. Only
+the active message is reparsed while it streams. As soon as the next message
+boundary appears, the completed message receives a permanent ID and is detached
+from the VT buffer; later terminal repainting, reflow, and input cannot rerender
+it. Incomplete or invalid math stays visible as one source block instead of being
+rendered as broken fragments. Because this mode observes the terminal, Markdown
+syntax removed completely by the child cannot be recovered.
 
 For a dark terminal, the default near-white equation color is appropriate. For
 a light terminal, choose a dark color:

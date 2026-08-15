@@ -67,7 +67,7 @@ header {
 #transcript {
   width: max(100%, calc(var(--terminal-columns, 80) * 1ch + 32px));
   min-height: 100%;
-  padding: 10px 16px 45vh;
+  padding: 10px 16px 18vh;
   font-family: var(--terminal-font);
   font-size: var(--terminal-font-size);
   line-height: var(--terminal-line-height);
@@ -78,37 +78,192 @@ header {
   width: 100%;
 }
 
+.terminal-group {
+  margin: 0 0 0.8rem;
+}
+
+.terminal-group.panel {
+  margin: 0.45rem 0 1rem;
+}
+
 .terminal-row {
   min-height: calc(1em * var(--terminal-line-height));
   margin: 0;
   white-space: pre;
 }
 
-.display-math {
-  min-height: calc(1em * var(--terminal-line-height));
-  padding: 0.45rem 0;
+.message {
+  position: relative;
+  min-width: 0;
+  margin: 0 0 1rem;
+  padding: 0.45rem 1.2rem 0.65rem 2rem;
+  overflow-wrap: anywhere;
+}
+
+.message.assistant::before {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.15rem;
+  color: #aeb5c1;
+  content: "•";
+}
+
+.message.user {
+  margin: 0.45rem 0 1rem;
+  padding: 0.8rem 1.2rem;
+  background: #444955;
+}
+
+.message > :first-child {
+  margin-top: 0;
+}
+
+.message > :last-child {
+  margin-bottom: 0;
+}
+
+.message p,
+.message ul,
+.message ol,
+.message blockquote,
+.message pre,
+.message table,
+.message .math-display {
+  margin: 0.7rem 0;
+}
+
+.message h1,
+.message h2,
+.message h3,
+.message h4,
+.message h5,
+.message h6 {
+  margin: 1.15rem 0 0.55rem;
+  color: #f1f3f7;
+  line-height: 1.25;
+}
+
+.message h1 {
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid #4a515e;
+  font-size: 1.55rem;
+}
+
+.message h2 {
+  font-size: 1.3rem;
+}
+
+.message h3 {
+  font-size: 1.1rem;
+  font-style: italic;
+}
+
+.message ul,
+.message ol {
+  padding-left: 1.7rem;
+}
+
+.message li + li {
+  margin-top: 0.25rem;
+}
+
+.message blockquote {
+  padding: 0.2rem 0 0.2rem 0.9rem;
+  border-left: 3px solid #697386;
+  color: #c1c6d0;
+}
+
+.message code {
+  padding: 0.08rem 0.3rem;
+  border: 1px solid #454c59;
+  border-radius: 4px;
+  background: #1d2128;
+  color: #f0d9a6;
+  font-family: var(--terminal-font);
+  font-size: 0.93em;
+}
+
+.message pre {
+  max-width: 100%;
+  padding: 0.85rem 1rem;
+  overflow: auto;
+  border: 1px solid #3c4350;
+  border-radius: 7px;
+  background: #1b1f26;
+  white-space: pre;
+}
+
+.message pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e7e9ee;
+  font-size: 0.92rem;
+}
+
+.message table {
+  display: block;
+  max-width: 100%;
   overflow-x: auto;
+  border-spacing: 0;
+  border-collapse: collapse;
 }
 
-.display-math-content {
-  width: max-content;
-  min-width: 1ch;
-  color: var(--terminal-foreground);
-}
-
-.display-math-content .katex-display,
-.inline-display-math .katex-display {
-  margin: 0;
+.message th,
+.message td {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #48505d;
   text-align: left;
-}
-
-.inline-math,
-.inline-display-math {
-  display: inline-block;
-  vertical-align: baseline;
   white-space: nowrap;
 }
 
-.inline-display-math {
+.message th {
+  background: #343a45;
+  color: #f1f3f7;
+}
+
+.message tr:nth-child(even) td {
+  background: #292e37;
+}
+
+.message a {
+  color: #73c9d2;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.message hr {
+  margin: 1.1rem 0;
+  border: 0;
+  border-top: 1px solid #48505d;
+}
+
+.math-display,
+.math-inline-display {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.math-display .katex-display,
+.math-inline-display .katex-display {
+  margin: 0;
+  text-align: left !important;
+}
+
+.math-inline-display {
+  display: inline-block;
   vertical-align: middle;
+}
+
+.math-source {
+  padding: 0.65rem 0.8rem;
+  border-left: 3px solid #697386;
+  background: #1f242c;
+  color: #d9dde5;
+  white-space: pre-wrap;
+}
+
+.math-source-inline {
+  color: inherit;
+  white-space: pre-wrap;
 }

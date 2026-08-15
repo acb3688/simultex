@@ -1,12 +1,12 @@
 import { Terminal } from "@xterm/xterm";
+import MarkdownIt from "markdown-it";
 import katex from "katex";
 import "katex/dist/katex.css";
+import { MessageRecords } from "./message-records.js";
 import "./style.css";
 
 const DEFAULT_FOREGROUND = "var(--terminal-foreground)";
 const DEFAULT_BACKGROUND = "var(--terminal-background)";
-const MAX_BLOCK_ROWS = 48;
-const MATH_STABILITY_MS = 140;
 
 const ANSI_COLORS = [
   "#1d2027", "#d16969", "#69c07b", "#d7ba7d",
@@ -23,8 +23,7 @@ const status = document.querySelector("#status");
 const scroller = document.querySelector("#transcript-host");
 const transcript = document.querySelector("#transcript");
 
-// xterm is deliberately never opened. It is our VT parser and buffer, not the
-// browser's renderer. The visible document below is ordinary, scrollable HTML.
+// xterm is the VT state engine only. It is never mounted into the page.
 const terminal = new Terminal({
   cols: 80,
   rows: 24,
@@ -33,17 +32,170 @@ const terminal = new Terminal({
   scrollback: 20_000,
 });
 
+function renderKatex(math, displayMode, source, escapeHtml) {
+  try {
+    return katex.renderToString(math, {
+      displayMode,
+      throwOnError: true,
+      strict: "ignore",
+      trust: false,
+      output: "htmlAndMathml",
+    });
+  } catch {
+    const className = displayMode ? "math-source" : "math-source-inline";
+    const tag = displayMode ? "pre" : "span";
+    return `<${tag} class="${className}">${escapeHtml(source)}</${tag}>`;
+  }
+}
+
+function mathMarkdownPlugin(md) {
+  const escapeHtml = md.utils.escapeHtml;
+
+  function looksLikeMath(content) {
+    return /\\[A-Za-z]+|[-_^=+*/<>]|\d\s*[A-Za-z]|[A-Za-z]\s*\d|[∑∏∫√∞≈≠≤≥±×÷·]/.test(content);
+  }
+
+  function mathBlock(state, startLine, endLine, silent) {
+    const start = state.bMarks[startLine] + state.tShift[startLine];
+    const first = state.src.slice(start, state.eMarks[startLine]).trim();
+
+    const singleLinePairs = [["\\[", "\\]"], ["$$", "$$"], ["[", "]"]];
+    for (const [opener, closer] of singleLinePairs) {
+      if (!first.startsWith(opener) || !first.endsWith(closer)) continue;
+      if (first.length <= opener.length + closer.length) continue;
+      const content = first.slice(opener.length, first.length - closer.length).trim();
+      if (opener === "[" && !looksLikeMath(content)) continue;
+      if (silent) return true;
+      const token = state.push("math_block", "math", 0);
+      token.block = true;
+      token.content = content;
+      token.meta = { source: first };
+      token.map = [startLine, startLine + 1];
+      state.line = startLine + 1;
+      return true;
+    }
+
+    const pairs = new Map([["\\[", "\\]"], ["[", "]"], ["$$", "$$"]]);
+    const closer = pairs.get(first);
+    if (!closer) return false;
+    const limit = Math.min(endLine, startLine + 64);
+    let nextLine = startLine + 1;
+    while (nextLine < limit) {
+      const lineStart = state.bMarks[nextLine] + state.tShift[nextLine];
+      const line = state.src.slice(lineStart, state.eMarks[nextLine]).trim();
+      if (line === closer) break;
+      nextLine += 1;
+    }
+    if (nextLine >= limit) return false;
+
+    const content = state.getLines(startLine + 1, nextLine, 0, false).trim();
+    if (!content || (first === "[" && !looksLikeMath(content))) return false;
+    if (silent) return true;
+    const token = state.push("math_block", "math", 0);
+    token.block = true;
+    token.content = content;
+    token.meta = { source: `${first}\n${content}\n${closer}` };
+    token.map = [startLine, nextLine + 1];
+    state.line = nextLine + 1;
+    return true;
+  }
+
+  function pushInline(state, end, math, source, displayMode) {
+    const token = state.push(displayMode ? "math_inline_display" : "math_inline", "math", 0);
+    token.content = math;
+    token.meta = { source };
+    state.pos = end;
+  }
+
+  function mathInline(state, silent) {
+    const start = state.pos;
+    const source = state.src;
+    const max = state.posMax;
+
+    const delimited = [
+      { opener: "\\[", closer: "\\]", display: true },
+      { opener: "\\(", closer: "\\)", display: false },
+      { opener: "$$", closer: "$$", display: true },
+    ];
+    if (config.parseDollars !== false) {
+      delimited.push({ opener: "$", closer: "$", display: false, dollars: true });
+    }
+
+    for (const rule of delimited) {
+      if (!source.startsWith(rule.opener, start)) continue;
+      if (rule.dollars && source.startsWith("$$", start)) continue;
+      const contentStart = start + rule.opener.length;
+      if (contentStart >= max || /\s/.test(source[contentStart])) return false;
+      const endMarker = source.indexOf(rule.closer, contentStart);
+      if (endMarker < 0 || endMarker >= max) return false;
+      if (rule.dollars && source[endMarker + 1] === "$") return false;
+      const math = source.slice(contentStart, endMarker).trim();
+      if (!math || (rule.dollars && /^[\d.,]+$/.test(math))) return false;
+      if (silent) return true;
+      const end = endMarker + rule.closer.length;
+      pushInline(state, end, math, source.slice(start, end), rule.display);
+      return true;
+    }
+
+    // Codex sometimes consumes \(...\) as Markdown but leaves simple TeX
+    // identifiers parenthesized. Keep this deliberately narrow so fragments
+    // of a larger display equation are never rendered independently.
+    if (source[start] === "(") {
+      const match = source.slice(start).match(/^\((\\([A-Za-z]+)(?:\{[^{}()\n]*\})?)\)/);
+      const unsafeCommands = new Set(["begin", "end", "frac", "left", "right"]);
+      if (match && !unsafeCommands.has(match[2])) {
+        if (silent) return true;
+        pushInline(state, start + match[0].length, match[1], match[0], false);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  md.block.ruler.before("fence", "anytex_math_block", mathBlock, {
+    alt: ["paragraph", "reference", "blockquote", "list"],
+  });
+  md.inline.ruler.before("escape", "anytex_math_inline", mathInline);
+  md.renderer.rules.math_block = (tokens, index) => {
+    const token = tokens[index];
+    return `<div class="math-display">${renderKatex(
+      token.content,
+      true,
+      token.meta.source,
+      escapeHtml,
+    )}</div>\n`;
+  };
+  md.renderer.rules.math_inline = (tokens, index) => {
+    const token = tokens[index];
+    return renderKatex(token.content, false, token.meta.source, escapeHtml);
+  };
+  md.renderer.rules.math_inline_display = (tokens, index) => {
+    const token = tokens[index];
+    return `<span class="math-inline-display">${renderKatex(
+      token.content,
+      true,
+      token.meta.source,
+      escapeHtml,
+    )}</span>`;
+  };
+}
+
+const markdown = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: true,
+  breaks: false,
+}).use(mathMarkdownPlugin);
+
 let snapshots = [];
 let bufferType;
 let previousColumns = terminal.cols;
 let previousLength = 0;
 let previousBaseY = 0;
 let renderFrame;
-let stabilityTimer;
+let settledRenderTimer;
+const messageRecords = new MessageRecords();
 const nodes = new Map();
-const candidates = new Map();
-const committedMath = new Map();
-let seenMathIds;
 
 function paletteColor(index) {
   if (index < ANSI_COLORS.length) return ANSI_COLORS[index];
@@ -95,17 +247,19 @@ function cellStyle(cell) {
   return style;
 }
 
+function emptySnapshot() {
+  return {
+    text: "",
+    fragments: [],
+    signature: "",
+    wrapped: false,
+    rowBackground: DEFAULT_BACKGROUND,
+  };
+}
+
 function captureLine(buffer, row) {
   const line = buffer.getLine(row);
-  if (!line) {
-    return {
-      text: "",
-      fragments: [],
-      signature: "",
-      wrapped: false,
-      rowBackground: DEFAULT_BACKGROUND,
-    };
-  }
+  if (!line) return emptySnapshot();
   const workCell = buffer.getNullCell();
   const fragments = [];
   let current;
@@ -136,6 +290,7 @@ function captureLine(buffer, row) {
     }
     kept.push(fragment);
   }
+
   const text = kept.map((fragment) => fragment.text).join("");
   const backgroundCounts = new Map();
   for (const fragment of kept) {
@@ -150,10 +305,8 @@ function captureLine(buffer, row) {
       backgroundCoverage = coverage;
     }
   }
-  // Full-width TUI panels commonly paint each terminal cell. Put that color
-  // on the row box itself so CSS line leading cannot expose seams between
-  // adjacent rows. Partial highlights remain scoped to their text spans.
   if (backgroundCoverage < terminal.cols / 2) rowBackground = DEFAULT_BACKGROUND;
+
   const signature = `${Number(line.isWrapped)}:${kept.map(
     (fragment) => `${fragment.style.key}:${fragment.text}`,
   ).join("\u0001")}`;
@@ -168,37 +321,25 @@ function captureBuffer() {
     || buffer.baseY < previousBaseY;
   let changedStart = reset ? 0 : Math.min(previousBaseY, buffer.baseY);
 
-  // Once scrollback is full, xterm trims from the front without changing its
-  // length. Detect that rare case and rebuild row identities coherently.
   if (!reset && snapshots.length === buffer.length && snapshots[0]) {
     const firstText = buffer.getLine(0)?.translateToString(true) ?? "";
     if (firstText !== snapshots[0].text) changedStart = 0;
   }
-
   if (changedStart === 0) snapshots = [];
   snapshots.length = buffer.length;
   for (let row = changedStart; row < buffer.length; row += 1) {
     snapshots[row] = captureLine(buffer, row);
   }
 
-  // A terminal buffer always contains a full screen of rows, even when the
-  // lower rows have never held content. They are implementation capacity, not
-  // transcript, and would otherwise create a large empty tail in the page.
   let contentLength = snapshots.length;
-  while (contentLength > 0 && snapshots[contentLength - 1].text === "") {
-    contentLength -= 1;
-  }
+  while (contentLength > 0 && snapshots[contentLength - 1].text === "") contentLength -= 1;
   snapshots.length = contentLength;
 
   bufferType = buffer.type;
   previousColumns = terminal.cols;
   previousLength = buffer.length;
   previousBaseY = buffer.baseY;
-  return {
-    buffer,
-    changedStart,
-    cursorRow: buffer.baseY + buffer.cursorY,
-  };
+  return { cursorRow: buffer.baseY + buffer.cursorY };
 }
 
 function scheduleRender() {
@@ -206,157 +347,200 @@ function scheduleRender() {
   renderFrame = window.requestAnimationFrame(renderTranscript);
 }
 
-function scheduleStabilityPass(delay) {
-  if (stabilityTimer !== undefined) return;
-  stabilityTimer = window.setTimeout(() => {
-    stabilityTimer = undefined;
+function scheduleSettledRender() {
+  window.clearTimeout(settledRenderTimer);
+  settledRenderTimer = window.setTimeout(() => {
+    // Codex can finish a response with several cursor-addressed repaints in
+    // quick succession. Capture once more after that burst so the last math
+    // delimiter is present before the response is frozen by the input panel.
     scheduleRender();
-  }, Math.max(1, delay));
+  }, 160);
 }
 
-function stableMath(id, signature, start, end, cursorRow, now) {
-  seenMathIds?.add(id);
-  if (cursorRow >= start && cursorRow <= end) {
-    candidates.delete(id);
-    committedMath.delete(id);
-    return false;
-  }
-  if (committedMath.get(id)?.signature === signature) return true;
-  const candidate = candidates.get(id);
-  if (!candidate || candidate.signature !== signature) {
-    candidates.set(id, { signature, since: now, start });
-    scheduleStabilityPass(MATH_STABILITY_MS);
-    return false;
-  }
-  const age = now - candidate.since;
-  if (age < MATH_STABILITY_MS) {
-    scheduleStabilityPass(MATH_STABILITY_MS - age);
-    return false;
-  }
-  committedMath.set(id, { signature, start });
-  candidates.delete(id);
-  return true;
+function trimRows(rows) {
+  let start = 0;
+  let end = rows.length;
+  while (start < end && !rows[start].text.trim()) start += 1;
+  while (end > start && !rows[end - 1].text.trim()) end -= 1;
+  return rows.slice(start, end);
 }
 
-function findBlock(snapshotsToScan, start, cursorRow, now) {
-  const opener = snapshotsToScan[start]?.text.trim();
-  const pairs = new Map([["\\[", "\\]"], ["[", "]"], ["$$", "$$"]]);
-  const closer = pairs.get(opener);
-  if (!closer) return undefined;
-  const limit = Math.min(snapshotsToScan.length, start + MAX_BLOCK_ROWS);
-  let end = start + 1;
-  while (end < limit && snapshotsToScan[end]?.text.trim() !== closer) end += 1;
-  if (end >= limit) return undefined;
-  const math = snapshotsToScan.slice(start + 1, end)
-    .map((line) => line.text.trim())
-    .join("\n")
-    .trim();
-  if (!math || (opener === "[" && !math.includes("\\"))) return undefined;
-  const id = `${bufferType}:${start}:block`;
-  const signature = `${end}:${math}`;
-  if (!stableMath(id, signature, start, end, cursorRow, now)) return undefined;
-  return { id, start, end, math, signature };
+function logicalLines(rows) {
+  const lines = [];
+  for (const row of trimRows(rows)) {
+    const text = row.text.trimEnd();
+    if (row.wrapped && lines.length) lines[lines.length - 1] += text;
+    else lines.push(text);
+  }
+  return lines;
 }
 
-function inlineRegions(snapshot, row, cursorRow, now) {
-  const patterns = [
-    { regex: /\\\[(.+?)\\\]/g, block: true, dollars: false },
-    { regex: /\$\$(.+?)\$\$/g, block: true, dollars: true },
-    { regex: /\\\((.+?)\\\)/g, block: false, dollars: false },
-    { regex: /\((\\[A-Za-z]+(?:[^()]|\\[()])*)\)/g, block: false, dollars: false },
-  ];
-  if (config.parseDollars !== false) {
-    patterns.push({
-      regex: /(?<!\\)\$(?!\$)(\S(?:.*?\S)?)\$(?!\$)/g,
-      block: false,
-      dollars: true,
-    });
-  }
-  const regions = [];
-  for (const pattern of patterns) {
-    pattern.regex.lastIndex = 0;
-    for (const match of snapshot.text.matchAll(pattern.regex)) {
-      const math = match[1].trim();
-      const start = match.index;
-      const end = start + match[0].length;
-      if (!math || (pattern.dollars && !pattern.block && /^[\d.,]+$/.test(math))) continue;
-      if (regions.some((region) => start < region.end && end > region.start)) continue;
-      const id = `${bufferType}:${row}:inline:${start}:${end}`;
-      const signature = `${pattern.block}:${math}`;
-      if (!stableMath(id, signature, row, row, cursorRow, now)) continue;
-      regions.push({ id, start, end, math, block: pattern.block, signature });
-    }
-  }
-  return regions.sort((left, right) => left.start - right.start);
+function commonIndent(lines) {
+  const indents = lines
+    .filter((line) => line.trim())
+    .map((line) => line.length - line.trimStart().length);
+  return indents.length ? Math.min(...indents) : 0;
 }
 
-function dominantBackground(start, end) {
+function markdownSource(rows, kind) {
+  const lines = logicalLines(rows);
+  const indent = commonIndent(lines);
+  const normalized = lines.map((line) => line.slice(Math.min(indent, line.length)));
+  const first = normalized.findIndex((line) => line.trim());
+  if (first >= 0) {
+    normalized[first] = kind === "user"
+      ? normalized[first].replace(/^\s*[›❯>]\s?/, "")
+      : normalized[first].replace(/^\s*[•·]\s?/, "");
+  }
+  return normalized.join("\n").trim();
+}
+
+function rangeSignature(rows) {
+  return rows.map((row) => row.signature).join("\u0002");
+}
+
+function rangeBackground(rows) {
   const counts = new Map();
-  for (let row = start; row <= end; row += 1) {
-    for (const fragment of snapshots[row].fragments) {
-      const count = counts.get(fragment.style.background) || 0;
-      counts.set(fragment.style.background, count + fragment.text.length);
-    }
+  for (const row of rows) {
+    const background = row.rowBackground;
+    if (background === DEFAULT_BACKGROUND) continue;
+    counts.set(background, (counts.get(background) || 0) + 1);
   }
   let result = DEFAULT_BACKGROUND;
-  let maximum = -1;
+  let maximum = 0;
   for (const [background, count] of counts) {
     if (count > maximum) {
-      maximum = count;
       result = background;
+      maximum = count;
     }
   }
   return result;
 }
 
-function buildModels(start, cursorRow) {
-  const models = [];
-  const now = performance.now();
-  seenMathIds = new Set();
-  for (let row = start; row < snapshots.length; row += 1) {
-    const block = findBlock(snapshots, row, cursorRow, now);
-    if (block) {
-      const source = snapshots.slice(row, block.end + 1);
-      const nonempty = source.map((line) => line.text).filter((line) => line.trim());
-      const background = dominantBackground(row, block.end);
-      const column = nonempty.length
-        ? Math.min(...nonempty.map((line) => line.search(/\S/)).filter((value) => value >= 0))
-        : 0;
-      models.push({
-        key: `${bufferType}:${row}`,
-        kind: "math",
-        start: row,
-        end: block.end,
-        math: block.math,
-        column,
-        background,
-        signature: `math:${block.signature}:${column}:${background}`,
-      });
-      row = block.end;
+function findUserRanges() {
+  const ranges = [];
+  for (let start = 0; start < snapshots.length;) {
+    if (snapshots[start].rowBackground === DEFAULT_BACKGROUND) {
+      start += 1;
       continue;
     }
-    const snapshot = snapshots[row];
-    const inline = inlineRegions(snapshot, row, cursorRow, now);
-    models.push({
-      key: `${bufferType}:${row}`,
-      kind: "row",
-      start: row,
-      end: row,
-      snapshot,
-      inline,
-      signature: `row:${snapshot.signature}:${inline.map(
-        (region) => `${region.start}:${region.end}:${region.signature}`,
-      ).join("|")}`,
-    });
+    let end = start + 1;
+    while (end < snapshots.length && snapshots[end].rowBackground !== DEFAULT_BACKGROUND) end += 1;
+    const first = snapshots.slice(start, end).find((row) => row.text.trim())?.text.trimStart() || "";
+    if (/^[›❯>]\s?/.test(first)) ranges.push({ start, end });
+    start = end;
   }
-  for (const [id, candidate] of candidates) {
-    if (candidate.start >= start && !seenMathIds.has(id)) candidates.delete(id);
+  return ranges;
+}
+
+function isCodexStatusLine(text) {
+  return /^\s*[•·]\s+\S+\s+(?:low|medium|high|xhigh|max|ultra)\s+·\s+(?:[~/]|[A-Za-z]:\\)/i
+    .test(text);
+}
+
+function firstAssistantMarker(start, end) {
+  for (let row = start; row < end; row += 1) {
+    const text = snapshots[row].text;
+    if (!isCodexStatusLine(text) && /^\s*[•·]\s?/.test(text)) return row;
   }
-  for (const [id, committed] of committedMath) {
-    if (committed.start >= start && !seenMathIds.has(id)) committedMath.delete(id);
+  return -1;
+}
+
+function looksLikeMarkdown(rows) {
+  const source = logicalLines(rows).join("\n");
+  return /(^|\n)\s*(?:#{1,6}\s|```|\\\[|\[\s*$|\$\$\s*$)/m.test(source)
+    || /\\\(.+?\\\)|\$\S.+?\$/s.test(source);
+}
+
+function messageModel(kind, start, end, cursorRow) {
+  const rows = snapshots.slice(start, end);
+  const source = markdownSource(rows, kind);
+  return {
+    key: `${bufferType}:${start}:${kind}`,
+    kind,
+    messageRole: kind,
+    start,
+    end: end - 1,
+    rows,
+    source,
+    active: cursorRow >= start && cursorRow < end,
+    background: kind === "user" ? rangeBackground(rows) : DEFAULT_BACKGROUND,
+    signature: `${kind}:${rangeSignature(rows)}:${source}`,
+  };
+}
+
+function terminalModel(start, end, panel = false, messageRole) {
+  const rows = snapshots.slice(start, end);
+  return {
+    key: `${bufferType}:${start}:terminal`,
+    kind: "terminal",
+    messageRole,
+    start,
+    end: end - 1,
+    rows,
+    panel,
+    signature: `terminal:${Number(panel)}:${rangeSignature(rows)}`,
+  };
+}
+
+function addDefaultRange(models, start, end, asAssistant, cursorRow) {
+  if (start >= end || !snapshots.slice(start, end).some((row) => row.text.trim())) return;
+  if (asAssistant) {
+    models.push(messageModel("assistant", start, end, cursorRow));
+    return;
   }
-  seenMathIds = undefined;
+  const marker = firstAssistantMarker(start, end);
+  if (marker >= 0) {
+    if (marker > start) models.push(terminalModel(start, marker));
+    models.push(messageModel("assistant", marker, end, cursorRow));
+  } else if (looksLikeMarkdown(snapshots.slice(start, end))) {
+    models.push(messageModel("assistant", start, end, cursorRow));
+  } else {
+    models.push(terminalModel(start, end));
+  }
+}
+
+function buildModels(cursorRow) {
+  const models = [];
+  const userRanges = findUserRanges();
+  let position = 0;
+  let haveUser = false;
+  let activeUserTail = false;
+
+  for (let index = 0; index < userRanges.length; index += 1) {
+    const range = userRanges[index];
+    addDefaultRange(models, position, range.start, haveUser, cursorRow);
+    const cursorInside = cursorRow >= range.start && cursorRow < range.end;
+    const isLatest = index === userRanges.length - 1;
+    const tailHasResponse = isLatest && snapshots.slice(range.end).some(
+      (row) => row.text.trim() && !isCodexStatusLine(row.text),
+    );
+    const active = cursorInside || (isLatest && !tailHasResponse);
+    if (active) {
+      models.push(terminalModel(range.start, range.end, true, "user"));
+      activeUserTail = true;
+    }
+    else models.push(messageModel("user", range.start, range.end, cursorRow));
+    position = range.end;
+    haveUser = true;
+  }
+  if (activeUserTail) {
+    if (position < snapshots.length
+      && snapshots.slice(position).some((row) => row.text.trim())) {
+      models.push(terminalModel(position, snapshots.length));
+    }
+  } else {
+    addDefaultRange(models, position, snapshots.length, haveUser, cursorRow);
+  }
   return models;
+}
+
+function freezeBefore(models) {
+  let latestMessage = -1;
+  for (let index = 0; index < models.length; index += 1) {
+    if (models[index].messageRole) latestMessage = index;
+  }
+  return Math.max(latestMessage, 0);
 }
 
 function applyTextStyle(element, style) {
@@ -368,81 +552,43 @@ function applyTextStyle(element, style) {
   if (style.decorations) element.style.textDecoration = style.decorations;
 }
 
-function appendTextRange(parent, snapshot, start, end) {
-  for (const fragment of snapshot.fragments) {
-    if (fragment.end <= start || fragment.start >= end) continue;
-    const from = Math.max(start, fragment.start) - fragment.start;
-    const to = Math.min(end, fragment.end) - fragment.start;
-    const span = document.createElement("span");
-    span.textContent = fragment.text.slice(from, to);
-    applyTextStyle(span, fragment.style);
-    parent.append(span);
+function renderTerminalRows(node, model) {
+  node.className = `transcript-block terminal-group${model.panel ? " panel" : ""}`;
+  for (const snapshot of model.rows) {
+    const row = document.createElement("div");
+    row.className = "terminal-row";
+    row.style.backgroundColor = snapshot.rowBackground;
+    for (const fragment of snapshot.fragments) {
+      const span = document.createElement("span");
+      span.textContent = fragment.text;
+      applyTextStyle(span, fragment.style);
+      row.append(span);
+    }
+    node.append(row);
   }
-}
-
-function sourceStyleAt(snapshot, offset) {
-  return snapshot.fragments.find(
-    (fragment) => fragment.start <= offset && fragment.end > offset,
-  )?.style;
 }
 
 function renderModel(node, model) {
   node.replaceChildren();
-  node.className = `transcript-block ${model.kind === "math" ? "display-math" : "terminal-row"}`;
-  node.classList.toggle("wrapped", Boolean(model.snapshot?.wrapped));
   node.style.cssText = "";
-
-  if (model.kind === "math") {
-    node.style.backgroundColor = model.background;
-    const math = document.createElement("div");
-    math.className = "display-math-content";
-    math.style.marginLeft = `${model.column}ch`;
-    katex.render(model.math, math, {
-      displayMode: true,
-      throwOnError: false,
-      strict: "ignore",
-      trust: false,
-      output: "htmlAndMathml",
-    });
-    node.append(math);
+  if (model.kind === "terminal") {
+    renderTerminalRows(node, model);
     return;
   }
-
-  let offset = 0;
-  node.style.backgroundColor = model.snapshot.rowBackground;
-  for (const region of model.inline) {
-    appendTextRange(node, model.snapshot, offset, region.start);
-    const math = document.createElement("span");
-    math.className = region.block ? "inline-display-math" : "inline-math";
-    const sourceStyle = sourceStyleAt(model.snapshot, region.start);
-    if (sourceStyle) applyTextStyle(math, sourceStyle);
-    katex.render(region.math, math, {
-      displayMode: region.block,
-      throwOnError: false,
-      strict: "ignore",
-      trust: false,
-      output: "htmlAndMathml",
-    });
-    node.append(math);
-    offset = region.end;
-  }
-  appendTextRange(node, model.snapshot, offset, model.snapshot.text.length);
+  node.className = `transcript-block message ${model.kind}${model.active ? " active" : ""}`;
+  if (model.kind === "user") node.style.backgroundColor = model.background;
+  if (model.source) node.innerHTML = markdown.render(model.source);
+  else node.textContent = "\u00a0";
 }
 
 function scrollAnchor() {
   const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 32;
   if (atBottom) return { atBottom };
-  const point = document.elementFromPoint(
-    scroller.getBoundingClientRect().left + 24,
-    scroller.getBoundingClientRect().top + 4,
-  );
+  const rect = scroller.getBoundingClientRect();
+  const point = document.elementFromPoint(rect.left + 24, rect.top + 4);
   const block = point?.closest?.(".transcript-block");
   if (!block) return { atBottom, scrollTop: scroller.scrollTop };
-  return {
-    atBottom,
-    key: block.dataset.key,
-    offset: block.offsetTop - scroller.scrollTop,
-  };
+  return { atBottom, key: block.dataset.key, offset: block.offsetTop - scroller.scrollTop };
 }
 
 function restoreScroll(anchor) {
@@ -451,25 +597,19 @@ function restoreScroll(anchor) {
     return;
   }
   const block = anchor.key ? nodes.get(anchor.key) : undefined;
-  if (block?.isConnected) {
-    scroller.scrollTop = block.offsetTop - anchor.offset;
-  } else if (anchor.scrollTop !== undefined) {
-    scroller.scrollTop = anchor.scrollTop;
-  }
+  if (block?.isConnected) scroller.scrollTop = block.offsetTop - anchor.offset;
+  else if (anchor.scrollTop !== undefined) scroller.scrollTop = anchor.scrollTop;
 }
 
-function reconcileTail(start, modelsToRender) {
+function reconcile(models) {
   const anchor = scrollAnchor();
-  const desired = new Set(modelsToRender.map((model) => model.key));
-  const existingTail = [...transcript.children].filter(
-    (node) => Number(node.dataset.endRow) >= start,
-  );
-  let cursor = existingTail[0] || null;
+  const desired = new Set(models.map((model) => model.key));
+  let cursor = transcript.firstChild;
 
-  for (const model of modelsToRender) {
+  for (const model of models) {
     let node = nodes.get(model.key);
     if (!node) {
-      node = document.createElement("div");
+      node = document.createElement("section");
       nodes.set(model.key, node);
     }
     node.dataset.key = model.key;
@@ -483,25 +623,18 @@ function reconcileTail(start, modelsToRender) {
     cursor = node.nextSibling;
   }
 
-  for (const node of existingTail) {
-    if (desired.has(node.dataset.key)) continue;
-    nodes.delete(node.dataset.key);
+  for (const [key, node] of nodes) {
+    if (desired.has(key)) continue;
+    nodes.delete(key);
     node.remove();
   }
   restoreScroll(anchor);
 }
 
 function renderTranscript() {
-  const { changedStart, cursorRow } = captureBuffer();
-  let pendingStart = changedStart;
-  for (const candidate of candidates.values()) {
-    pendingStart = Math.min(pendingStart, candidate.start);
-  }
-  // Include pending formulas even if very fast output moved them beyond the
-  // normal tail lookback before their short stability window elapsed.
-  const rebuildStart = Math.max(0, Math.min(changedStart - MAX_BLOCK_ROWS, pendingStart));
-  const modelsToRender = buildModels(rebuildStart, cursorRow);
-  reconcileTail(rebuildStart, modelsToRender);
+  const { cursorRow } = captureBuffer();
+  const models = buildModels(cursorRow);
+  reconcile(messageRecords.update(models, freezeBefore(models)));
   transcript.style.setProperty("--terminal-columns", terminal.cols);
 }
 
@@ -528,10 +661,14 @@ if (!token) {
       bufferType = undefined;
     }
     scheduleRender();
+    scheduleSettledRender();
   });
   events.addEventListener("output", (event) => {
     const binary = atob(event.data);
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    terminal.write(bytes, scheduleRender);
+    terminal.write(bytes, () => {
+      scheduleRender();
+      scheduleSettledRender();
+    });
   });
 }
