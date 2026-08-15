@@ -91,7 +91,7 @@ class _EventBus:
 
 
 class BrowserCompanion:
-    """Serve a read-only xterm.js mirror of raw PTY output."""
+    """Serve a read-only rich transcript derived from raw PTY output."""
 
     def __init__(self, port: int = 0, *, parse_dollars: bool = True):
         self.token = secrets.token_urlsafe(24)

@@ -50,8 +50,9 @@ anytex -- python -q
 ### Experimental browser companion
 
 Browser mode leaves the main terminal completely unchanged and mirrors the raw
-PTY output to a read-only localhost page. The page reconstructs the terminal
-with xterm.js and renders detected equations with KaTeX:
+PTY output to a read-only localhost page. xterm.js interprets the VT control
+stream without displaying its own terminal. AnyTeX projects that buffer into a
+normal scrollable HTML transcript and replaces detected equations with KaTeX:
 
 ```sh
 anytex --browser -- codex
@@ -71,6 +72,13 @@ random per-run token in the printed URL. Keep that URL private: the browser view
 can contain the full terminal conversation. This mode does not send Kitty
 graphics escapes, placeholder characters, or any other modified output to the
 main terminal.
+
+The browser is a rich transcript, not a pixel-perfect second terminal. ANSI
+colors and fixed-width layouts such as tables are preserved, while display math
+is allowed to take its natural height. Completed historical rows retain their
+DOM nodes as new output arrives. A formula being typed or streamed remains as
+source briefly and is promoted only after its closing delimiter is complete and
+stable; this prevents partial equations from flashing during generation.
 
 For a dark terminal, the default near-white equation color is appropriate. For
 a light terminal, choose a dark color:
@@ -164,6 +172,7 @@ Inside tmux, anytex wraps graphics escapes for tmux passthrough. tmux may need
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 scripts/replay_capture.py /path/to/codex.raw
+cd browser-ui && npm install && npm run build
 ```
 
 The test suite covers chunk boundaries, ANSI sequences, ambiguous dollars,

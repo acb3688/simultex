@@ -6,6 +6,7 @@ import argparse
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from . import __version__
@@ -85,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--browser",
         action="store_true",
-        help="mirror unchanged output to a read-only localhost browser with rendered LaTeX",
+        help="mirror unchanged output to a read-only localhost rich transcript",
     )
     parser.add_argument(
         "--browser-port",
@@ -167,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"anytex: cannot start browser companion: {exc}") from None
         with companion:
             print(f"anytex: browser companion: {companion.url}", file=sys.stderr)
+            time.sleep(10)
             return _run(
                 command,
                 transform=None,

@@ -2,6 +2,9 @@
   color-scheme: dark;
   --terminal-background: #242830;
   --terminal-foreground: #e7e9ee;
+  --terminal-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --terminal-font-size: 15px;
+  --terminal-line-height: 1.22;
 }
 
 * {
@@ -16,7 +19,7 @@ body {
   overflow: hidden;
   background: var(--terminal-background);
   color: var(--terminal-foreground);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--terminal-font);
 }
 
 body {
@@ -25,7 +28,7 @@ body {
 }
 
 header {
-  z-index: 30;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -53,56 +56,59 @@ header {
   color: #ff7b72;
 }
 
-#terminal-host {
-  position: relative;
+#transcript-host {
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  overflow-anchor: none;
   background: var(--terminal-background);
 }
 
-#terminal,
-#terminal > .xterm {
+#transcript {
+  width: max(100%, calc(var(--terminal-columns, 80) * 1ch + 32px));
+  min-height: 100%;
+  padding: 10px 16px 45vh;
+  font-family: var(--terminal-font);
+  font-size: var(--terminal-font-size);
+  line-height: var(--terminal-line-height);
+  font-variant-ligatures: none;
+}
+
+.transcript-block {
   width: 100%;
-  height: 100%;
 }
 
-#terminal .xterm-viewport {
-  background-color: var(--terminal-background) !important;
+.terminal-row {
+  min-height: calc(1em * var(--terminal-line-height));
+  margin: 0;
+  white-space: pre;
 }
 
-#terminal {
-  padding: 8px;
+.display-math {
+  min-height: calc(1em * var(--terminal-line-height));
+  padding: 0.45rem 0;
+  overflow-x: auto;
 }
 
-#math-overlays {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.math-region {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  overflow: visible;
-  background: var(--terminal-background);
+.display-math-content {
+  width: max-content;
+  min-width: 1ch;
   color: var(--terminal-foreground);
 }
 
-.math-region.block {
-  justify-content: flex-start;
-  padding: 0 0.25rem;
+.display-math-content .katex-display,
+.inline-display-math .katex-display {
+  margin: 0;
+  text-align: left;
 }
 
-.math-region.inline {
-  justify-content: center;
+.inline-math,
+.inline-display-math {
+  display: inline-block;
+  vertical-align: baseline;
   white-space: nowrap;
 }
 
-.math-region .katex-display {
-  margin: 0;
-  text-align: left;
+.inline-display-math {
+  vertical-align: middle;
 }

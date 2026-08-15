@@ -38,6 +38,8 @@ class BrowserCompanionTests(unittest.TestCase):
         self.assertIn("AnyTeX Browser Companion", body)
         self.assertIn("parseDollars", body)
         self.assertIn("false", body)
+        self.assertIn('id="transcript"', body)
+        self.assertNotIn("math-overlays", body)
         self.assertEqual("127.0.0.1", companion._server.server_address[0])
 
     def test_event_stream_rejects_wrong_token(self) -> None:
