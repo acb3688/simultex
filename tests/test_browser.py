@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -75,6 +76,21 @@ class BrowserCompanionTests(unittest.TestCase):
 
         self.assertTrue(args.browser)
         self.assertEqual(8123, args.browser_port)
+
+    def test_api_events_share_the_ordered_event_bus(self) -> None:
+        with BrowserCompanion() as companion:
+            companion.feed(b"before")
+            companion.api_event(
+                {"version": 1, "type": "turn.started", "turn_id": "turn-1"}
+            )
+            companion.feed(b"after")
+
+            history, client = companion._events.subscribe()
+            companion._events.unsubscribe(client)
+
+        self.assertEqual([event.name for event in history], ["output", "api", "output"])
+        self.assertEqual(json.loads(history[1].data)["turn_id"], "turn-1")
+        self.assertEqual([event.sequence for event in history], [1, 2, 3])
 
 
 if __name__ == "__main__":

@@ -61,6 +61,16 @@ anytex --browser -- codex
 anytex --browser -- claude
 ```
 
+For direct `codex` and `claude` commands, browser mode also starts a temporary
+loopback API proxy. The child alone receives the per-run routing override:
+Codex gets command-line configuration for its Responses base URL, while Claude
+Code gets `ANTHROPIC_BASE_URL` through its child environment. The proxy forwards
+responses as they arrive and records provider-neutral turn, call, user-message,
+and assistant-text events. These events are currently collected in shadow mode;
+the visible transcript still comes entirely from the PTY while forwarding is
+validated. Use `--no-api-proxy` for the previous PTY-only behavior or
+`--api-upstream URL` to override the provider upstream during development.
+
 Open the token-bearing URL printed at startup. Keyboard input remains in the
 main terminal; the browser is deliberately a companion rather than a second
 interactive client. Use a fixed port when helpful for browser automation:

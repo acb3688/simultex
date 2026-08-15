@@ -10,7 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "anytex contributors" }]
-dependencies = ["pyte>=0.8.2,<0.9"]
+dependencies = [
+    "fastapi>=0.115,<1",
+    "httpx>=0.27,<1",
+    "pyte>=0.8.2,<0.9",
+    "uvicorn>=0.30,<1",
+]
 
 [project.scripts]
 anytex = "anytex.cli:main"

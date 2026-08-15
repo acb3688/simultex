@@ -134,6 +134,11 @@ class BrowserCompanion:
         payload = json.dumps({"columns": columns, "rows": rows}, separators=(",", ":"))
         self._events.publish(_Event("resize", payload, len(payload)))
 
+    def api_event(self, payload: dict[str, object]) -> None:
+        """Publish a normalized model event without changing PTY rendering."""
+        encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        self._events.publish(_Event("api", encoded, len(encoded.encode("utf-8"))))
+
     def close(self) -> None:
         self._events.close()
         self._server.shutdown()

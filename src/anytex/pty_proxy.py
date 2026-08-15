@@ -14,7 +14,7 @@ import termios
 import tty
 from collections.abc import Sequence
 from types import FrameType
-from typing import BinaryIO, Protocol
+from typing import BinaryIO, Mapping, Protocol
 
 
 class StreamTransform(Protocol):
@@ -74,11 +74,16 @@ def run_proxy(
     transform: StreamTransform | None,
     raw_output: BinaryIO | None = None,
     observer: StreamObserver | None = None,
+    child_env: Mapping[str, str] | None = None,
 ) -> int:
     pid, master = pty.fork()
     if pid == 0:
         try:
-            os.execvpe(command[0], list(command), os.environ.copy())
+            os.execvpe(
+                command[0],
+                list(command),
+                dict(os.environ if child_env is None else child_env),
+            )
         except OSError as exc:
             print(f"anytex: cannot run {command[0]!r}: {exc}", file=sys.stderr)
         os._exit(127)

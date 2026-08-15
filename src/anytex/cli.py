@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import __version__
 from .browser import BrowserCompanion
+from .model_proxy import ModelApiProxy, detect_provider, route_child, validate_upstream
 from .protocol import KittyGraphics, TerminalGeometry, supports_kitty_graphics
 from .pty_proxy import StreamObserver, StreamTransform, run_proxy
 from .render import LatexRenderer, RenderError
@@ -94,6 +95,16 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PORT",
         help="localhost port for --browser (default: choose an available port)",
     )
+    parser.add_argument(
+        "--no-api-proxy",
+        action="store_true",
+        help="disable authoritative model API capture in --browser mode",
+    )
+    parser.add_argument(
+        "--api-upstream",
+        metavar="URL",
+        help="override the detected provider's upstream API base URL",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER, help="command to run")
     return parser
 
@@ -148,6 +159,11 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("anytex: --browser-port must be between 0 and 65535")
     if args.keep_latex and args.parser == "screen":
         raise SystemExit("anytex: --keep-latex requires --parser stream")
+    if args.api_upstream:
+        try:
+            args.api_upstream = validate_upstream(args.api_upstream)
+        except ValueError as exc:
+            raise SystemExit(f"anytex: {exc}") from None
     if args.check:
         return _check(args)
     command = args.command
@@ -167,6 +183,35 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"anytex: cannot start browser companion: {exc}") from None
         with companion:
             print(f"anytex: browser companion: {companion.url}", file=sys.stderr)
+            provider = None if args.no_api_proxy else detect_provider(command)
+            if provider is not None:
+                try:
+                    model_proxy = ModelApiProxy(
+                        provider,
+                        companion,
+                        upstream=args.api_upstream,
+                    )
+                    with model_proxy:
+                        routed_command, child_env = route_child(
+                            command,
+                            provider,
+                            model_proxy.url,
+                        )
+                        print(
+                            f"anytex: capturing {provider} API events in shadow mode",
+                            file=sys.stderr,
+                        )
+                        return _run(
+                            routed_command,
+                            transform=None,
+                            capture_path=args.capture_raw,
+                            observer=companion,
+                            child_env=child_env,
+                        )
+                except OSError as exc:
+                    raise SystemExit(
+                        f"anytex: cannot start model API proxy: {exc}"
+                    ) from None
             return _run(
                 command,
                 transform=None,
@@ -232,9 +277,15 @@ def _run(
     transform: StreamTransform | None,
     capture_path: Path | None,
     observer: StreamObserver | None = None,
+    child_env: dict[str, str] | None = None,
 ) -> int:
     if capture_path is None:
-        return run_proxy(command, transform=transform, observer=observer)
+        return run_proxy(
+            command,
+            transform=transform,
+            observer=observer,
+            child_env=child_env,
+        )
     try:
         capture = capture_path.open("xb")
     except FileExistsError:
@@ -243,7 +294,13 @@ def _run(
         raise SystemExit(f"anytex: cannot create capture file {capture_path}: {exc}") from None
     print(f"anytex: capturing raw child output in {capture_path}", file=sys.stderr)
     try:
-        return run_proxy(command, transform=transform, raw_output=capture, observer=observer)
+        return run_proxy(
+            command,
+            transform=transform,
+            raw_output=capture,
+            observer=observer,
+            child_env=child_env,
+        )
     finally:
         capture.close()
 
