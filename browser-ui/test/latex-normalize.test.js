@@ -39,3 +39,12 @@ test("uses surviving matrix source lines when all separators were consumed", () 
     String.raw`\begin{bmatrix} 3 \\ 2 \end{bmatrix}`,
   );
 });
+
+test("removes a surviving single slash before joining matrix source lines", () => {
+  const source = "\\begin{bmatrix}\na & b\\\nc & d\n\\end{bmatrix}";
+
+  assert.equal(
+    normalizeTerminalMath(source),
+    String.raw`\begin{bmatrix} a & b \\ c & d \end{bmatrix}`,
+  );
+});

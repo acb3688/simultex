@@ -56,8 +56,13 @@ class LaunchRoutingTests(unittest.TestCase):
         )
 
         self.assertEqual(command[0], "codex")
-        self.assertIn('openai_base_url="http://127.0.0.1:9000/token"', command)
-        self.assertIn("features.responses_websockets=false", command)
+        self.assertIn('model_provider="anytex"', command)
+        self.assertIn(
+            'model_providers.anytex.base_url="http://127.0.0.1:9000/token"',
+            command,
+        )
+        self.assertIn("model_providers.anytex.requires_openai_auth=true", command)
+        self.assertIn("model_providers.anytex.supports_websockets=false", command)
         self.assertEqual(command[-2:], ["resume", "--last"])
         self.assertEqual(environ, {"PATH": "/bin"})
 
@@ -233,7 +238,7 @@ class ProxyIntegrationTests(unittest.TestCase):
     def upstream_url(self) -> str:
         return f"http://127.0.0.1:{self.upstream.server_address[1]}"
 
-    def test_stream_is_forwarded_exactly_and_emits_shadow_events(self) -> None:
+    def test_stream_is_forwarded_exactly_and_emits_api_events(self) -> None:
         first = b'data: {"type":"response.output_text.delta","delta":"A\\\\\\\\B"}\n\n'
         second = b'data: {"type":"response.completed","response":{"status":"completed"}}\n\n'
         _UpstreamHandler.response_chunks = [first[:11], first[11:], second]

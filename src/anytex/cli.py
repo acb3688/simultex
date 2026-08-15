@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
                             model_proxy.url,
                         )
                         print(
-                            f"anytex: capturing {provider} API events in shadow mode",
+                            f"anytex: using authoritative {provider} API transcript events",
                             file=sys.stderr,
                         )
                         return _run(

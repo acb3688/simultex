@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import MarkdownIt from "markdown-it";
 import katex from "katex";
 import "katex/dist/katex.css";
+import { ApiTranscript } from "./api-transcript.js";
 import {
   hasAssistantMarker,
   hasPromptMarker,
@@ -254,8 +255,10 @@ let previousBaseY = 0;
 let renderFrame;
 let settledRenderTimer;
 const messageRecords = new MessageRecords();
+const apiTranscript = new ApiTranscript();
 const nodes = new Map();
 const promptBackgrounds = new Set();
+let renderedRecords = [];
 
 function paletteColor(index) {
   if (index < ANSI_COLORS.length) return ANSI_COLORS[index];
@@ -728,7 +731,9 @@ function renderModel(node, model) {
     return;
   }
   node.className = `transcript-block message ${model.kind}${model.active ? " active" : ""}`;
-  if (model.kind === "user") node.style.backgroundColor = model.background;
+  if (model.kind === "user" && model.background) {
+    node.style.backgroundColor = model.background;
+  }
   if (model.source) node.innerHTML = markdown.render(model.source);
   else node.textContent = "\u00a0";
 }
@@ -767,6 +772,13 @@ function reconcile(models) {
     node.dataset.key = model.key;
     node.dataset.startRow = String(model.start);
     node.dataset.endRow = String(model.end);
+    node.dataset.authoritative = String(Boolean(model.authoritative));
+    if (model.apiTurnId) node.dataset.apiTurnId = model.apiTurnId;
+    else delete node.dataset.apiTurnId;
+    if (model.apiCallId) node.dataset.apiCallId = model.apiCallId;
+    else delete node.dataset.apiCallId;
+    if (model.apiProvider) node.dataset.apiProvider = model.apiProvider;
+    else delete node.dataset.apiProvider;
     if (node._anytexSignature !== model.signature) {
       renderModel(node, model);
       node._anytexSignature = model.signature;
@@ -787,7 +799,8 @@ function renderTranscript() {
   const { cursorRow } = captureBuffer();
   const models = buildModels(cursorRow, messageRecords.startRow);
   const records = messageRecords.update(models, freezeBefore(models));
-  reconcile(records);
+  renderedRecords = apiTranscript.reconcile(records);
+  reconcile(renderedRecords);
   transcript.style.setProperty("--terminal-columns", terminal.cols);
   // If the candidate changed during the settle pass, give it another bounded
   // pass. This self-flushes the final repaint without polling forever.
@@ -803,7 +816,9 @@ if (downloadButton) {
     try {
       await downloadSnapshot(
         document,
-        [...messageRecords.committed, ...messageRecords.live],
+        renderedRecords,
+        new Date(),
+        apiTranscript.diagnostics(),
       );
     } catch (error) {
       console.error("Could not export AnyTeX transcript", error);
@@ -852,5 +867,14 @@ if (!token) {
       scheduleRender();
       scheduleSettledRender();
     });
+  });
+  events.addEventListener("api", (event) => {
+    try {
+      if (apiTranscript.accept(JSON.parse(event.data), event.lastEventId)) {
+        scheduleRender();
+      }
+    } catch (error) {
+      console.error("Could not process AnyTeX API transcript event", error);
+    }
   });
 }

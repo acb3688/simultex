@@ -357,9 +357,15 @@ def route_child(
     elif provider == "openai":
         routed[1:1] = [
             "-c",
-            f"openai_base_url={json.dumps(proxy_url)}",
+            'model_provider="anytex"',
             "-c",
-            "features.responses_websockets=false",
+            'model_providers.anytex.name="AnyTeX OpenAI proxy"',
+            "-c",
+            f"model_providers.anytex.base_url={json.dumps(proxy_url)}",
+            "-c",
+            "model_providers.anytex.requires_openai_auth=true",
+            "-c",
+            "model_providers.anytex.supports_websockets=false",
         ]
     else:
         raise ValueError(f"unsupported provider: {provider}")

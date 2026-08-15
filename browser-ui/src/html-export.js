@@ -70,9 +70,29 @@ function addRecordDiagnostics(clone, records) {
     block.dataset.kind = record.kind || "";
     block.dataset.role = record.messageRole || "";
     block.dataset.frozen = String(Boolean(record.frozen));
+    block.dataset.authoritative = String(Boolean(record.authoritative));
     block.dataset.renderSignature = record.signature || "";
+    if (record.apiSessionId) block.dataset.apiSessionId = record.apiSessionId;
+    if (record.apiTurnId) block.dataset.apiTurnId = record.apiTurnId;
+    if (record.apiCallId) block.dataset.apiCallId = record.apiCallId;
+    if (record.apiProvider) block.dataset.apiProvider = record.apiProvider;
     if (record.source !== undefined) block.dataset.source = record.source;
   }
+}
+
+export function serializeApiDiagnostics(diagnostics) {
+  return JSON.stringify(diagnostics || { version: 1, events: [], turns: [] })
+    .replace(/[<>&\u2028\u2029]/g, (character) => (
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+    ));
+}
+
+function addApiDiagnostics(document, clone, diagnostics) {
+  const script = document.createElement("script");
+  script.id = "anytex-api-transcript";
+  script.type = "application/json";
+  script.textContent = serializeApiDiagnostics(diagnostics);
+  clone.querySelector("body")?.append(script);
 }
 
 export async function createSnapshotHtml(
@@ -80,6 +100,7 @@ export async function createSnapshotHtml(
   records,
   now = new Date(),
   fetchAsset = fetch,
+  apiDiagnostics,
 ) {
   const css = await snapshotCss(document, fetchAsset);
   const clone = document.documentElement.cloneNode(true);
@@ -103,12 +124,18 @@ export async function createSnapshotHtml(
   const mode = clone.querySelector(".mode");
   if (mode) mode.textContent = `saved ${now.toISOString()}`;
   addRecordDiagnostics(clone, records);
+  addApiDiagnostics(document, clone, apiDiagnostics);
 
   return `<!doctype html>\n${clone.outerHTML}\n`;
 }
 
-export async function downloadSnapshot(document, records, now = new Date()) {
-  const html = await createSnapshotHtml(document, records, now);
+export async function downloadSnapshot(
+  document,
+  records,
+  now = new Date(),
+  apiDiagnostics,
+) {
+  const html = await createSnapshotHtml(document, records, now, fetch, apiDiagnostics);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

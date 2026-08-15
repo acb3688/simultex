@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { inlineCssAssets, snapshotFilename } from "../src/html-export.js";
+import {
+  inlineCssAssets,
+  serializeApiDiagnostics,
+  snapshotFilename,
+} from "../src/html-export.js";
 
 test("creates a filesystem-safe timestamped snapshot filename", () => {
   const now = new Date("2026-08-15T04:30:12.345Z");
@@ -34,4 +38,14 @@ test("uses an absolute asset URL when embedding fails", async () => {
     result,
     '.missing { src: url("http://127.0.0.1:8000/assets/missing.woff") }',
   );
+});
+
+test("serializes API diagnostics without creating an executable script terminator", () => {
+  const serialized = serializeApiDiagnostics({
+    version: 1,
+    events: [{ event: { type: "assistant.delta", delta: "</script>&" } }],
+  });
+
+  assert.doesNotMatch(serialized, /<\/script>/i);
+  assert.deepEqual(JSON.parse(serialized).events[0].event.delta, "</script>&");
 });

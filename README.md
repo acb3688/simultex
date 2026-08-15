@@ -66,10 +66,13 @@ loopback API proxy. The child alone receives the per-run routing override:
 Codex gets command-line configuration for its Responses base URL, while Claude
 Code gets `ANTHROPIC_BASE_URL` through its child environment. The proxy forwards
 responses as they arrive and records provider-neutral turn, call, user-message,
-and assistant-text events. These events are currently collected in shadow mode;
-the visible transcript still comes entirely from the PTY while forwarding is
-validated. Use `--no-api-proxy` for the previous PTY-only behavior or
-`--api-upstream URL` to override the provider upstream during development.
+and assistant-text events. API user messages and assistant Markdown replace the
+corresponding PTY-derived message blocks wholesale, preserving exact Markdown
+and TeX while terminal chrome, tool UI, status indicators, and permission panels
+continue to come from the PTY. Calls caused by tools remain grouped in their
+original turn. If an API record is absent or fails before producing text, the
+PTY-derived block remains as the fallback. Use `--no-api-proxy` for PTY-only
+behavior or `--api-upstream URL` to override the upstream during development.
 
 Open the token-bearing URL printed at startup. Keyboard input remains in the
 main terminal; the browser is deliberately a companion rather than a second
@@ -83,7 +86,8 @@ Use **Download HTML** in the companion header to save the current transcript as
 a static, self-contained snapshot. The export embeds its CSS and KaTeX fonts,
 removes the live connection and access token, and records each block's original
 Markdown source, terminal row bounds, role, frozen state, and render signature
-as `data-*` attributes for later diagnosis.
+as `data-*` attributes for later diagnosis. It also embeds the normalized API
+event log and reconciliation metadata in a non-executable JSON script block.
 
 The server binds only to `127.0.0.1`, and its live event stream requires the
 random per-run token in the printed URL. Keep that URL private: the browser view

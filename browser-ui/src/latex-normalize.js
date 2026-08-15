@@ -10,8 +10,11 @@ export function normalizeTerminalMath(math) {
     // whitespace, e.g. `3\2` or `1\-4`. Restrict this repair to numeric/sign
     // cell starts so legitimate commands such as `3\alpha` remain untouched.
     repaired = repaired.replace(/(\S)\\(?=[+-]?(?:\d|\.\d))/g, "$1 \\\\ ");
-    const lines = repaired.split("\n").map((line) => line.trim()).filter(Boolean);
+    let lines = repaired.split("\n").map((line) => line.trim()).filter(Boolean);
     if (lines.length > 1 && !repaired.includes("\\\\")) {
+      lines = lines.map((line, index) => (
+        index < lines.length - 1 ? line.replace(/\\\s*$/, "").trimEnd() : line
+      ));
       repaired = ` ${lines.join(" \\\\ ")} `;
     }
     return `\\begin{${name}}${repaired}\\end{${name}}`;
