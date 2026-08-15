@@ -221,6 +221,97 @@ header {
   font-size: 0.92rem;
 }
 
+.copy-region {
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.copy-inline {
+  cursor: copy;
+}
+
+.copy-inline:hover,
+.copy-inline:focus-visible {
+  border-color: #73c9d2;
+  background: #29343c;
+  color: #fff0c6;
+  outline: none;
+}
+
+.copy-inline.copied {
+  border-color: #70d68b;
+  background: #20352c;
+  color: #baf2c8;
+}
+
+.copy-inline.copy-failed {
+  border-color: #ff7b72;
+}
+
+.copy-block {
+  position: relative;
+  border-radius: 7px;
+  cursor: copy;
+}
+
+.copy-block::after {
+  position: absolute;
+  top: 0.42rem;
+  right: 0.55rem;
+  z-index: 1;
+  padding: 0.16rem 0.4rem;
+  border: 1px solid #56606f;
+  border-radius: 4px;
+  background: #252b34;
+  color: #c8ced8;
+  content: "Copy";
+  font-size: 0.7rem;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.copy-block:hover::after,
+.copy-block:focus-visible::after,
+.copy-block.copied::after,
+.copy-block.copy-failed::after {
+  opacity: 1;
+}
+
+.copy-block:hover > pre,
+.copy-block:focus-visible > pre {
+  border-color: #5c7d87;
+  background: #20262e;
+}
+
+.copy-block:focus-visible {
+  outline: 1px solid #73c9d2;
+  outline-offset: 2px;
+}
+
+.copy-block.copied::after {
+  border-color: #70d68b;
+  color: #9be9ad;
+  content: "Copied";
+}
+
+.copy-block.copy-failed::after {
+  border-color: #ff7b72;
+  color: #ff9b94;
+  content: "Copy failed";
+}
+
+.latex-fence.copy-block {
+  padding: 0.42rem 0.55rem;
+  border: 1px solid transparent;
+}
+
+.latex-fence.copy-block:hover,
+.latex-fence.copy-block:focus-visible {
+  border-color: #4e6570;
+  background: #282e36;
+}
+
 .message table {
   display: block;
   max-width: 100%;

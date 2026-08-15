@@ -1,3 +1,5 @@
+import { SNAPSHOT_COPY_SCRIPT } from "./copy-source.js";
+
 function bytesToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -95,6 +97,13 @@ function addApiDiagnostics(document, clone, diagnostics) {
   clone.querySelector("body")?.append(script);
 }
 
+function addCopyRuntime(document, clone) {
+  const script = document.createElement("script");
+  script.dataset.anytexCopyRuntime = "";
+  script.textContent = SNAPSHOT_COPY_SCRIPT;
+  clone.querySelector("body")?.append(script);
+}
+
 export async function createSnapshotHtml(
   document,
   records,
@@ -124,6 +133,7 @@ export async function createSnapshotHtml(
   const mode = clone.querySelector(".mode");
   if (mode) mode.textContent = `saved ${now.toISOString()}`;
   addRecordDiagnostics(clone, records);
+  addCopyRuntime(document, clone);
   addApiDiagnostics(document, clone, apiDiagnostics);
 
   return `<!doctype html>\n${clone.outerHTML}\n`;

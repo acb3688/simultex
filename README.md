@@ -90,6 +90,9 @@ removes the live connection and access token, and records each block's original
 Markdown source, terminal row bounds, role, frozen state, and render signature
 as `data-*` attributes for later diagnosis. It also embeds the normalized API
 event log and reconciliation metadata in a non-executable JSON script block.
+Inline code, fenced code blocks, and rendered `latex`/`tex` fences highlight on
+hover and copy their original source when clicked. This remains available in
+downloaded snapshots, with a local-file clipboard fallback.
 
 The server binds only to `127.0.0.1`, and its live event stream requires the
 random per-run token in the printed URL. Keep that URL private: the browser view

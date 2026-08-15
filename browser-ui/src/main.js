@@ -10,6 +10,7 @@ import {
   isUserPanel,
   rememberPromptBackground,
 } from "./codex-chrome.js";
+import { installCopyInteractions } from "./copy-source.js";
 import { downloadSnapshot } from "./html-export.js";
 import { normalizeLatexFence, normalizeTerminalMath } from "./latex-normalize.js";
 import { MessageRecords } from "./message-records.js";
@@ -65,6 +66,11 @@ function renderKatex(math, displayMode, source, escapeHtml, repairTerminalMath) 
 function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
   const escapeHtml = md.utils.escapeHtml;
   const renderFence = md.renderer.rules.fence;
+
+  function copyAttributes(source, kind, label) {
+    return `class="copy-region ${kind}" data-copy-source="${escapeHtml(source)}" `
+      + `tabindex="0" role="button" aria-label="${label}"`;
+  }
 
   function looksLikeMath(content) {
     return /\\[A-Za-z]+|[-_^=+*/<>]|\d\s*[A-Za-z]|[A-Za-z]\s*\d|[∑∏∫√∞≈≠≤≥±×÷·]/.test(content);
@@ -223,17 +229,30 @@ function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
   md.renderer.rules.fence = (tokens, index, options, environment, renderer) => {
     const token = tokens[index];
     const language = token.info.trim().split(/\s+/, 1)[0].toLowerCase();
+    const copySource = token.content.replace(/\n$/, "");
     if (!["latex", "tex"].includes(language)) {
-      return renderFence(tokens, index, options, environment, renderer);
+      return `<div ${copyAttributes(copySource, "copy-block", "Copy code")}>${
+        renderFence(tokens, index, options, environment, renderer)
+      }</div>\n`;
     }
     const source = `\`\`\`${token.info}\n${token.content}\`\`\``;
-    return `<div class="math-display latex-fence">${renderKatex(
+    return `<div ${copyAttributes(
+      copySource,
+      "copy-block math-display latex-fence",
+      "Copy LaTeX source",
+    )}>${renderKatex(
       normalizeLatexFence(token.content.trim()),
       true,
       source,
       escapeHtml,
       repairTerminalMath,
     )}</div>\n`;
+  };
+  md.renderer.rules.code_inline = (tokens, index) => {
+    const source = tokens[index].content;
+    return `<code ${copyAttributes(source, "copy-inline", "Copy inline code")}>${
+      escapeHtml(source)
+    }</code>`;
   };
   md.renderer.rules.math_block = (tokens, index) => {
     const token = tokens[index];
@@ -278,6 +297,8 @@ function createMarkdown(repairTerminalMath) {
 
 const apiMarkdown = createMarkdown(false);
 const terminalMarkdown = createMarkdown(true);
+
+installCopyInteractions(transcript);
 
 let snapshots = [];
 let bufferType;
