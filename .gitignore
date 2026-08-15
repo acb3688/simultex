@@ -1,3 +1,4 @@
 .venv/
 **/__pycache__/
 browser-ui/node_modules/
+.playwright-mcp/

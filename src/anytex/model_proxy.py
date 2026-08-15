@@ -34,7 +34,10 @@ _HOP_BY_HOP = {
     "upgrade",
 }
 _REQUEST_STRIP = _HOP_BY_HOP | {"host", "content-length"}
-_RESPONSE_STRIP = _HOP_BY_HOP | {"content-length"}
+# httpx decodes upstream content encodings as it streams. The downstream body
+# and the observer therefore both see the same decoded bytes, so the original
+# representation metadata must not be forwarded.
+_RESPONSE_STRIP = _HOP_BY_HOP | {"content-encoding", "content-length"}
 _METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
 _MAX_NON_STREAM_RESPONSE = 16 * 1024 * 1024
 
@@ -511,7 +514,7 @@ class ModelApiProxy:
                 return JSONResponse({"error": "not found"}, status_code=404)
 
             body = await request.body()
-            context = self._begin_observed_call(path, body)
+            context, request_streaming = self._begin_observed_call(path, body)
             target = self._target_url(path, request)
             headers = [
                 (name, value)
@@ -540,12 +543,20 @@ class ModelApiProxy:
                 )
 
             content_type = upstream_response.headers.get("content-type", "")
+            content_encoding = upstream_response.headers.get("content-encoding", "")
+            streaming = request_streaming or "text/event-stream" in content_type.lower()
+            if context is not None:
+                self.coordinator.publish(
+                    "call.response",
+                    context,
+                    upstream_status=upstream_response.status_code,
+                    content_type=content_type,
+                    content_encoding=content_encoding,
+                    streaming=streaming,
+                )
             observer = None
             if upstream_response.status_code < 400:
-                observer = self._observer(
-                    context,
-                    streaming="text/event-stream" in content_type.lower(),
-                )
+                observer = self._observer(context, streaming=streaming)
             elif context is not None:
                 self.coordinator.publish(
                     "call.failed",
@@ -555,7 +566,7 @@ class ModelApiProxy:
 
             async def relay():
                 try:
-                    async for chunk in upstream_response.aiter_raw():
+                    async for chunk in upstream_response.aiter_bytes():
                         if observer is not None:
                             observer.feed(chunk)
                         yield chunk
@@ -586,7 +597,9 @@ class ModelApiProxy:
 
         return app
 
-    def _begin_observed_call(self, path: str, body: bytes) -> CallContext | None:
+    def _begin_observed_call(
+        self, path: str, body: bytes
+    ) -> tuple[CallContext | None, bool]:
         normalized = "/" + path.strip("/")
         inference = (
             self.provider == "openai" and normalized.endswith("/responses")
@@ -594,7 +607,7 @@ class ModelApiProxy:
             self.provider == "anthropic" and normalized.endswith("/v1/messages")
         )
         if not inference:
-            return None
+            return None, False
         try:
             payload = json.loads(body)
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -602,7 +615,8 @@ class ModelApiProxy:
         if not isinstance(payload, dict):
             payload = {}
         user_markdown, continuation = _request_details(self.provider, payload)
-        return self.coordinator.begin_call(self.provider, user_markdown, continuation)
+        context = self.coordinator.begin_call(self.provider, user_markdown, continuation)
+        return context, payload.get("stream") is True
 
     def _observer(
         self, context: CallContext | None, *, streaming: bool

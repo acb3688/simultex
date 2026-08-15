@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import threading
 import unittest
@@ -198,6 +199,7 @@ class AdapterTests(unittest.TestCase):
 class _UpstreamHandler(BaseHTTPRequestHandler):
     response_status = 200
     response_type = "text/event-stream"
+    response_encoding: str | None = None
     response_chunks: list[bytes] = []
     requests: list[dict[str, object]] = []
 
@@ -209,6 +211,8 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
         )
         self.send_response(type(self).response_status)
         self.send_header("Content-Type", type(self).response_type)
+        if type(self).response_encoding:
+            self.send_header("Content-Encoding", type(self).response_encoding)
         self.send_header("X-Upstream-Test", "present")
         self.end_headers()
         for chunk in type(self).response_chunks:
@@ -224,6 +228,7 @@ class ProxyIntegrationTests(unittest.TestCase):
         _UpstreamHandler.requests = []
         _UpstreamHandler.response_status = 200
         _UpstreamHandler.response_type = "text/event-stream"
+        _UpstreamHandler.response_encoding = None
         _UpstreamHandler.response_chunks = []
         self.upstream = ThreadingHTTPServer(("127.0.0.1", 0), _UpstreamHandler)
         self.thread = threading.Thread(target=self.upstream.serve_forever, daemon=True)
@@ -269,12 +274,79 @@ class ProxyIntegrationTests(unittest.TestCase):
             [
                 "turn.started",
                 "call.started",
+                "call.response",
                 "assistant.delta",
                 "call.completed",
                 "turn.completed",
             ],
         )
         self.assertFalse(any("secret-value" in json.dumps(event) for event in sink.events))
+
+    def test_compressed_stream_is_decoded_for_forwarding_and_observation(self) -> None:
+        stream = (
+            b'data: {"type":"response.output_text.delta","delta":"Exact \\\\TeX"}\n\n'
+            b'data: {"type":"response.completed","response":{"status":"completed"}}\n\n'
+        )
+        compressed = gzip.compress(stream)
+        _UpstreamHandler.response_encoding = "gzip"
+        _UpstreamHandler.response_chunks = [compressed[:13], compressed[13:]]
+        sink = EventSink()
+
+        with ModelApiProxy("openai", sink, upstream=self.upstream_url) as proxy:
+            request = Request(
+                f"{proxy.url}/responses",
+                data=json.dumps({"input": "render exact TeX", "stream": True}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request, timeout=3) as response:
+                body = response.read()
+                content_encoding = response.headers.get("Content-Encoding")
+
+        self.assertEqual(body, stream)
+        self.assertIsNone(content_encoding)
+        self.assertEqual(
+            [
+                event.get("delta")
+                for event in sink.events
+                if event["type"] == "assistant.delta"
+            ],
+            ["Exact \\TeX"],
+        )
+        self.assertIn("call.completed", [event["type"] for event in sink.events])
+
+    def test_request_stream_flag_overrides_a_non_sse_content_type(self) -> None:
+        stream = (
+            b'data: {"type":"response.output_text.delta","delta":"raw Markdown"}\n\n'
+            b'data: {"type":"response.completed","response":{"status":"completed"}}\n\n'
+        )
+        _UpstreamHandler.response_type = "application/octet-stream"
+        _UpstreamHandler.response_chunks = [stream]
+        sink = EventSink()
+
+        with ModelApiProxy("openai", sink, upstream=self.upstream_url) as proxy:
+            request = Request(
+                f"{proxy.url}/responses",
+                data=json.dumps({"input": "stream this", "stream": True}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request, timeout=3) as response:
+                self.assertEqual(response.read(), stream)
+
+        response_event = next(
+            event for event in sink.events if event["type"] == "call.response"
+        )
+        self.assertEqual(response_event["content_type"], "application/octet-stream")
+        self.assertTrue(response_event["streaming"])
+        self.assertEqual(
+            [
+                event.get("delta")
+                for event in sink.events
+                if event["type"] == "assistant.delta"
+            ],
+            ["raw Markdown"],
+        )
 
     def test_upstream_error_status_and_body_are_not_wrapped(self) -> None:
         _UpstreamHandler.response_status = 429
