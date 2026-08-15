@@ -16,6 +16,10 @@ function userTextMatches(authoritative, terminal) {
     && (left.includes(right) || right.includes(left));
 }
 
+function turnKey(turn) {
+  return `${turn.sessionId}:${turn.id}`;
+}
+
 function alignUsers(turns, records) {
   const users = records
     .map((record, index) => ({ record, index }))
@@ -44,7 +48,7 @@ function alignUsers(turns, records) {
     if (userTextMatches(turns[turnIndex].userMarkdown, users[userIndex].record.source)
       && lengths[turnIndex][userIndex]
         === lengths[turnIndex + 1][userIndex + 1] + 1) {
-      matches.set(turns[turnIndex].id, users[userIndex].index);
+      matches.set(turnKey(turns[turnIndex]), users[userIndex].index);
       turnIndex += 1;
       userIndex += 1;
     } else if (lengths[turnIndex + 1][userIndex]
@@ -82,7 +86,7 @@ function callMarkdown(call) {
 
 function nextMatchedUser(turns, matches, start, fallback) {
   for (let index = start + 1; index < turns.length; index += 1) {
-    const match = matches.get(turns[index].id);
+    const match = matches.get(turnKey(turns[index]));
     if (match !== undefined) return match;
   }
   return fallback;
@@ -98,12 +102,11 @@ function trailingUiBoundary(records, start, end) {
   return end;
 }
 
-function apiRecord(base, turn, role, source, call) {
+function apiRecord(base, turn, role, source, call, synthetic = false) {
   const start = base?.start ?? 0;
-  const end = base?.end ?? start;
+  const end = synthetic ? start : (base?.end ?? start);
   const completed = role === "user" || Boolean(call?.completed || call?.failed);
   return {
-    ...(base || {}),
     key: call
       ? `api:${turn.sessionId}:${turn.id}:assistant:${call.id}`
       : `api:${turn.sessionId}:${turn.id}:user`,
@@ -204,7 +207,7 @@ export class ApiTranscript {
     let floor = 0;
 
     turns.forEach((turn, turnIndex) => {
-      const userIndex = matches.get(turn.id);
+      const userIndex = matches.get(turnKey(turn));
       const upper = nextMatchedUser(turns, matches, turnIndex, records.length);
       const lower = Math.max(floor, userIndex === undefined ? floor : userIndex + 1);
       const assistantIndices = [];
@@ -221,12 +224,33 @@ export class ApiTranscript {
       const insertion = assistantIndices[0] ?? boundary;
       if (userIndex === undefined) {
         const base = records[insertion] ?? records[Math.max(0, insertion - 1)];
-        before[insertion].push(apiRecord(base, turn, "user", turn.userMarkdown));
+        before[insertion].push(apiRecord(
+          base,
+          turn,
+          "user",
+          turn.userMarkdown,
+          undefined,
+          true,
+        ));
       } else {
         replacements.set(
           userIndex,
           apiRecord(records[userIndex], turn, "user", turn.userMarkdown),
         );
+      }
+
+      // A submitted TUI panel can disappear for one repaint and then return.
+      // The PTY recorder may consequently preserve more than one copy of the
+      // same prompt. The API turn owns this user message, so consume every
+      // additional matching PTY copy before the next authoritative turn.
+      const duplicateStart = userIndex === undefined ? lower : userIndex + 1;
+      for (let index = duplicateStart; index < upper; index += 1) {
+        const record = records[index];
+        if (record.kind === "user"
+          && record.messageRole === "user"
+          && userTextMatches(turn.userMarkdown, record.source)) {
+          replacements.set(index, null);
+        }
       }
 
       let lastClaimed = userIndex;
@@ -236,7 +260,7 @@ export class ApiTranscript {
           const base = records[boundary]
             ?? records[userIndex]
             ?? records[Math.max(0, boundary - 1)];
-          before[boundary].push(apiRecord(base, turn, "assistant", source, call));
+          before[boundary].push(apiRecord(base, turn, "assistant", source, call, true));
         } else {
           claimedAssistants.add(recordIndex);
           replacements.set(
@@ -250,8 +274,8 @@ export class ApiTranscript {
       const settled = turn.calls.length > 0
         && turn.calls.every((call) => call.completed || call.failed);
       const nextTurnIsMatched = turnIndex + 1 >= turns.length
-        || matches.has(turns[turnIndex + 1].id);
-      if (userIndex !== undefined && calls.length && settled && nextTurnIsMatched) {
+        || matches.has(turnKey(turns[turnIndex + 1]));
+      if (calls.length && settled && nextTurnIsMatched) {
         for (const recordIndex of assistantIndices.slice(calls.length)) {
           replacements.set(recordIndex, null);
         }

@@ -203,6 +203,60 @@ test("extra PTY assistant blocks are removed after an authoritative call settles
   assert.deepEqual(reconciled.map((item) => item.source), ["Hello", "Clean answer"]);
 });
 
+test("duplicate PTY copies of an authoritative user message are removed", () => {
+  const transcript = new ApiTranscript();
+  beginTurn(transcript, "turn-1", "Show the equation");
+  completeCall(transcript, "turn-1", "call-1", String.raw`\[x+y\]`);
+
+  const reconciled = transcript.reconcile([
+    record("user", "Show the equation", 27),
+    record("user", "Show the equation", 27),
+    record("assistant", "damaged equation", 30),
+  ]);
+
+  assert.deepEqual(
+    reconciled.map((item) => [item.kind, item.source]),
+    [
+      ["user", "Show the equation"],
+      ["assistant", String.raw`\[x+y\]`],
+    ],
+  );
+  assert.equal(reconciled[0].authoritative, true);
+});
+
+test("a misclassified LaTeX prompt still produces one stable API turn", () => {
+  const transcript = new ApiTranscript();
+  const prompt = String.raw`$\int x^2 \; dx$, can you solve it?`;
+  const answer = String.raw`\[\int x^2\,dx=\frac{x^3}{3}+C\]`;
+  beginTurn(transcript, "turn-1", prompt);
+  completeCall(transcript, "turn-1", "call-1", answer);
+
+  const damagedPtyBlock = record("assistant", "$ int x2 dx can you solve it", 52, {
+    end: 57,
+    panel: true,
+    rows: ["terminal-only metadata"],
+  });
+  const reconciled = transcript.reconcile([damagedPtyBlock]);
+
+  assert.deepEqual(
+    reconciled.map((item) => [item.kind, item.source]),
+    [
+      ["user", prompt],
+      ["assistant", answer],
+    ],
+  );
+  assert.deepEqual(
+    reconciled.map((item) => item.key),
+    [
+      "api:session-1:turn-1:user",
+      "api:session-1:turn-1:assistant:call-1",
+    ],
+  );
+  assert.equal("panel" in reconciled[0], false);
+  assert.equal("rows" in reconciled[0], false);
+  assert.equal(reconciled[0].background, undefined);
+});
+
 test("duplicate SSE event ids do not duplicate streamed text", () => {
   const transcript = new ApiTranscript();
   beginTurn(transcript, "turn-1", "Hello");
