@@ -9,7 +9,7 @@ import secrets
 import sys
 import threading
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -35,9 +35,12 @@ class _Event:
     name: str
     data: str
     size: int
+    sequence: int = 0
 
     def encode(self) -> bytes:
-        return f"event: {self.name}\ndata: {self.data}\n\n".encode("utf-8")
+        return (
+            f"id: {self.sequence}\nevent: {self.name}\ndata: {self.data}\n\n"
+        ).encode("utf-8")
 
 
 class _EventBus:
@@ -47,9 +50,12 @@ class _EventBus:
         self._history_size = 0
         self._clients: set[Queue[_Event | None]] = set()
         self._lock = threading.Lock()
+        self._next_sequence = 1
 
     def publish(self, event: _Event) -> None:
         with self._lock:
+            event = replace(event, sequence=self._next_sequence)
+            self._next_sequence += 1
             self._history.append(event)
             self._history_size += event.size
             while self._history and self._history_size > self._history_limit:
@@ -64,14 +70,17 @@ class _EventBus:
             for client in stale:
                 self._clients.discard(client)
                 try:
+                    client.get_nowait()
                     client.put_nowait(None)
-                except Full:
+                except (Empty, Full):
                     pass
 
-    def subscribe(self) -> tuple[list[_Event], Queue[_Event | None]]:
+    def subscribe(
+        self, after_sequence: int = 0
+    ) -> tuple[list[_Event], Queue[_Event | None]]:
         client: Queue[_Event | None] = Queue(maxsize=_CLIENT_QUEUE_SIZE)
         with self._lock:
-            history = list(self._history)
+            history = [event for event in self._history if event.sequence > after_sequence]
             self._clients.add(client)
         return history, client
 
@@ -228,7 +237,11 @@ class BrowserCompanion:
                     self.send_error(HTTPStatus.FORBIDDEN)
                     return
 
-                history, events = companion._events.subscribe()
+                try:
+                    after_sequence = max(int(self.headers.get("Last-Event-ID", "0")), 0)
+                except ValueError:
+                    after_sequence = 0
+                history, events = companion._events.subscribe(after_sequence)
                 try:
                     self.send_response(HTTPStatus.OK)
                     self._headers("text/event-stream; charset=utf-8")

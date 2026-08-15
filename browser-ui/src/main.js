@@ -2,6 +2,8 @@ import { Terminal } from "@xterm/xterm";
 import MarkdownIt from "markdown-it";
 import katex from "katex";
 import "katex/dist/katex.css";
+import { isTransientComposer } from "./codex-chrome.js";
+import { normalizeTerminalMath } from "./latex-normalize.js";
 import { MessageRecords } from "./message-records.js";
 import "./style.css";
 
@@ -34,7 +36,7 @@ const terminal = new Terminal({
 
 function renderKatex(math, displayMode, source, escapeHtml) {
   try {
-    return katex.renderToString(math, {
+    return katex.renderToString(normalizeTerminalMath(math), {
       displayMode,
       throwOnError: true,
       strict: "ignore",
@@ -137,25 +139,74 @@ function mathMarkdownPlugin(md) {
       return true;
     }
 
-    // Codex sometimes consumes \(...\) as Markdown but leaves simple TeX
-    // identifiers parenthesized. Keep this deliberately narrow so fragments
-    // of a larger display equation are never rendered independently.
-    if (source[start] === "(") {
-      const match = source.slice(start).match(/^\((\\([A-Za-z]+)(?:\{[^{}()\n]*\})?)\)/);
-      const unsafeCommands = new Set(["begin", "end", "frac", "left", "right"]);
-      if (match && !unsafeCommands.has(match[2])) {
-        if (silent) return true;
-        pushInline(state, start + match[0].length, match[1], match[0], false);
-        return true;
-      }
-    }
     return false;
+  }
+
+  function parenthesizedMath(state) {
+    const pattern = /\(([^()\n]*\\[A-Za-z]+[^()\n]*)\)/g;
+    const unsafeCommand = /\\(?:begin|end|left|right)\b/;
+
+    for (const block of state.tokens) {
+      if (!block.children) continue;
+      const children = [];
+      for (let index = 0; index < block.children.length;) {
+        const token = block.children[index];
+        // Code spans and fenced blocks are distinct token types, so this only
+        // examines prose. With typographer/linkify enabled, Markdown-it can
+        // split `\times` into adjacent text/text_special tokens, so coalesce
+        // that prose run before looking for its surrounding parentheses.
+        if (token.type !== "text" && token.type !== "text_special") {
+          children.push(token);
+          index += 1;
+          continue;
+        }
+        const original = [];
+        let content = "";
+        while (index < block.children.length
+          && ["text", "text_special"].includes(block.children[index].type)) {
+          original.push(block.children[index]);
+          content += block.children[index].content;
+          index += 1;
+        }
+        let cursor = 0;
+        let changed = false;
+        pattern.lastIndex = 0;
+        for (const match of content.matchAll(pattern)) {
+          if (unsafeCommand.test(match[1])) continue;
+          if (match.index > cursor) {
+            const text = new state.Token("text", "", 0);
+            text.content = content.slice(cursor, match.index);
+            text.level = token.level;
+            children.push(text);
+          }
+          const math = new state.Token("math_inline", "math", 0);
+          math.content = match[1].trim();
+          math.meta = { source: match[0] };
+          math.level = token.level;
+          children.push(math);
+          cursor = match.index + match[0].length;
+          changed = true;
+        }
+        if (!changed) {
+          children.push(...original);
+          continue;
+        }
+        if (cursor < content.length) {
+          const text = new state.Token("text", "", 0);
+          text.content = content.slice(cursor);
+          text.level = token.level;
+          children.push(text);
+        }
+      }
+      block.children = children;
+    }
   }
 
   md.block.ruler.before("fence", "anytex_math_block", mathBlock, {
     alt: ["paragraph", "reference", "blockquote", "list"],
   });
   md.inline.ruler.before("escape", "anytex_math_inline", mathInline);
+  md.core.ruler.after("inline", "anytex_parenthesized_math", parenthesizedMath);
   md.renderer.rules.math_block = (tokens, index) => {
     const token = tokens[index];
     return `<div class="math-display">${renderKatex(
@@ -417,25 +468,46 @@ function rangeBackground(rows) {
   return result;
 }
 
-function findUserRanges() {
+function findPanelRanges(startAt = 0) {
   const ranges = [];
-  for (let start = 0; start < snapshots.length;) {
+  for (let start = startAt; start < snapshots.length;) {
     if (snapshots[start].rowBackground === DEFAULT_BACKGROUND) {
       start += 1;
       continue;
     }
     let end = start + 1;
     while (end < snapshots.length && snapshots[end].rowBackground !== DEFAULT_BACKGROUND) end += 1;
-    const first = snapshots.slice(start, end).find((row) => row.text.trim())?.text.trimStart() || "";
-    if (/^[›❯>]\s?/.test(first)) ranges.push({ start, end });
+    const rows = snapshots.slice(start, end);
+    const first = rows.find((row) => row.text.trim())?.text.trimStart() || "";
+    ranges.push({
+      start,
+      end,
+      user: /^[›❯>]\s?/.test(first),
+      transient: isTransientComposer(rows),
+    });
     start = end;
   }
   return ranges;
 }
 
 function isCodexStatusLine(text) {
-  return /^\s*[•·]\s+\S+\s+(?:low|medium|high|xhigh|max|ultra)\s+·\s+(?:[~/]|[A-Za-z]:\\)/i
+  return /^\s*(?:[•·]\s+)?\S+\s+(?:low|medium|high|xhigh|max|ultra)\s+·\s+(?:[~/]|[A-Za-z]:\\)/i
     .test(text);
+}
+
+function isCodexProgressLine(text) {
+  return /^\s*[•·]\s+(?:Working|Starting MCP servers)\b.*(?:esc to interrupt)/i.test(text);
+}
+
+function filteredRows(start, end, excludedRows, stripChrome = false) {
+  const rows = [];
+  for (let row = start; row < end; row += 1) {
+    if (excludedRows.has(row)) continue;
+    if (stripChrome && (isCodexStatusLine(snapshots[row].text)
+      || isCodexProgressLine(snapshots[row].text))) continue;
+    rows.push(snapshots[row]);
+  }
+  return rows;
 }
 
 function firstAssistantMarker(start, end) {
@@ -452,8 +524,9 @@ function looksLikeMarkdown(rows) {
     || /\\\(.+?\\\)|\$\S.+?\$/s.test(source);
 }
 
-function messageModel(kind, start, end, cursorRow) {
-  const rows = snapshots.slice(start, end);
+function messageModel(kind, start, end, cursorRow, excludedRows) {
+  const rows = filteredRows(start, end, excludedRows, kind === "assistant");
+  if (!rows.some((row) => row.text.trim())) return undefined;
   const source = markdownSource(rows, kind);
   return {
     key: `${bufferType}:${start}:${kind}`,
@@ -469,8 +542,9 @@ function messageModel(kind, start, end, cursorRow) {
   };
 }
 
-function terminalModel(start, end, panel = false, messageRole) {
-  const rows = snapshots.slice(start, end);
+function terminalModel(start, end, excludedRows, panel = false, messageRole) {
+  const rows = filteredRows(start, end, excludedRows, true);
+  if (!rows.some((row) => row.text.trim())) return undefined;
   return {
     key: `${bufferType}:${start}:terminal`,
     kind: "terminal",
@@ -483,33 +557,49 @@ function terminalModel(start, end, panel = false, messageRole) {
   };
 }
 
-function addDefaultRange(models, start, end, asAssistant, cursorRow) {
-  if (start >= end || !snapshots.slice(start, end).some((row) => row.text.trim())) return;
+function pushModel(models, model) {
+  if (model) models.push(model);
+}
+
+function addDefaultRange(models, start, end, asAssistant, cursorRow, excludedRows) {
+  const rows = filteredRows(start, end, excludedRows, asAssistant);
+  if (start >= end || !rows.some((row) => row.text.trim())) return;
   if (asAssistant) {
-    models.push(messageModel("assistant", start, end, cursorRow));
+    pushModel(models, messageModel("assistant", start, end, cursorRow, excludedRows));
     return;
   }
   const marker = firstAssistantMarker(start, end);
   if (marker >= 0) {
-    if (marker > start) models.push(terminalModel(start, marker));
-    models.push(messageModel("assistant", marker, end, cursorRow));
-  } else if (looksLikeMarkdown(snapshots.slice(start, end))) {
-    models.push(messageModel("assistant", start, end, cursorRow));
+    if (marker > start) pushModel(models, terminalModel(start, marker, excludedRows));
+    pushModel(models, messageModel("assistant", marker, end, cursorRow, excludedRows));
+  } else if (looksLikeMarkdown(rows)) {
+    pushModel(models, messageModel("assistant", start, end, cursorRow, excludedRows));
   } else {
-    models.push(terminalModel(start, end));
+    pushModel(models, terminalModel(start, end, excludedRows));
   }
 }
 
-function buildModels(cursorRow) {
+function buildModels(cursorRow, startAt = 0) {
   const models = [];
-  const userRanges = findUserRanges();
-  let position = 0;
-  let haveUser = false;
+  const panelRanges = findPanelRanges(startAt);
+  const transientRanges = panelRanges.filter((range) => range.transient);
+  const excludedRows = new Set(transientRanges.flatMap(
+    (range) => Array.from({ length: range.end - range.start }, (_, index) => range.start + index),
+  ));
+  const userRanges = panelRanges.filter((range) => range.user && !range.transient);
+  let position = startAt;
+  let haveUser = messageRecords.committed.some((record) => record.messageRole === "user");
   let activeUserTail = false;
+
+  // The splash screen, MCP startup progress, empty composer, and default
+  // suggestions are VT chrome rather than conversation content. The browser
+  // header already reports connection state, so wait for the first real prompt
+  // instead of flashing a half-painted terminal during startup.
+  if (!haveUser && userRanges.length === 0) return models;
 
   for (let index = 0; index < userRanges.length; index += 1) {
     const range = userRanges[index];
-    addDefaultRange(models, position, range.start, haveUser, cursorRow);
+    addDefaultRange(models, position, range.start, haveUser, cursorRow, excludedRows);
     const cursorInside = cursorRow >= range.start && cursorRow < range.end;
     const isLatest = index === userRanges.length - 1;
     const tailHasResponse = isLatest && snapshots.slice(range.end).some(
@@ -517,20 +607,20 @@ function buildModels(cursorRow) {
     );
     const active = cursorInside || (isLatest && !tailHasResponse);
     if (active) {
-      models.push(terminalModel(range.start, range.end, true, "user"));
+      pushModel(models, terminalModel(range.start, range.end, excludedRows, true, "user"));
       activeUserTail = true;
     }
-    else models.push(messageModel("user", range.start, range.end, cursorRow));
+    else pushModel(models, messageModel("user", range.start, range.end, cursorRow, excludedRows));
     position = range.end;
     haveUser = true;
   }
   if (activeUserTail) {
     if (position < snapshots.length
       && snapshots.slice(position).some((row) => row.text.trim())) {
-      models.push(terminalModel(position, snapshots.length));
+      pushModel(models, terminalModel(position, snapshots.length, excludedRows));
     }
   } else {
-    addDefaultRange(models, position, snapshots.length, haveUser, cursorRow);
+    addDefaultRange(models, position, snapshots.length, haveUser, cursorRow, excludedRows);
   }
   return models;
 }
@@ -633,7 +723,7 @@ function reconcile(models) {
 
 function renderTranscript() {
   const { cursorRow } = captureBuffer();
-  const models = buildModels(cursorRow);
+  const models = buildModels(cursorRow, messageRecords.startRow);
   reconcile(messageRecords.update(models, freezeBefore(models)));
   transcript.style.setProperty("--terminal-columns", terminal.cols);
 }

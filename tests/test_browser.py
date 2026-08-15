@@ -16,7 +16,24 @@ class EventBusTests(unittest.TestCase):
         history, client = bus.subscribe()
 
         self.assertEqual([(event.name, event.data) for event in history], [("output", "YWJj")])
+        self.assertEqual([event.sequence for event in history], [1])
         bus.unsubscribe(client)
+
+    def test_reconnecting_subscriber_only_receives_unseen_history(self) -> None:
+        bus = _EventBus(history_limit=100)
+        bus.publish(_Event("output", "YWFh", 3))
+        bus.publish(_Event("output", "YmJi", 3))
+
+        history, client = bus.subscribe(after_sequence=1)
+
+        self.assertEqual([event.data for event in history], ["YmJi"])
+        self.assertEqual([event.sequence for event in history], [2])
+        bus.unsubscribe(client)
+
+    def test_event_encoding_includes_sse_resume_id(self) -> None:
+        event = _Event("output", "YWJj", 3, sequence=42)
+
+        self.assertTrue(event.encode().startswith(b"id: 42\nevent: output\n"))
 
     def test_history_is_bounded(self) -> None:
         bus = _EventBus(history_limit=4)
