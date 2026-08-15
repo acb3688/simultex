@@ -3,7 +3,16 @@ const DEFAULT_SUGGESTIONS = [
   /^Implement \{feature\}$/i,
   /^Improve documentation in @filename$/i,
   /^Summarize recent commits$/i,
+  /^Try\s+["“].+["”]$/i,
 ];
+
+export function hasPromptMarker(text) {
+  return /^[›❯>]\s?/.test(text.trimStart());
+}
+
+export function hasAssistantMarker(text) {
+  return /^[•·●⏺]\s?/.test(text.trimStart());
+}
 
 export function panelText(rows) {
   return rows
@@ -16,6 +25,22 @@ export function panelText(rows) {
 
 export function isDefaultSuggestion(text) {
   return DEFAULT_SUGGESTIONS.some((pattern) => pattern.test(text.trim()));
+}
+
+export function isUserPanel(marker, background, promptBackgrounds) {
+  return marker || promptBackgrounds.has(background);
+}
+
+export function rememberPromptBackground(
+  marker,
+  transient,
+  background,
+  defaultBackground,
+  promptBackgrounds,
+) {
+  if ((marker || transient) && background !== defaultBackground) {
+    promptBackgrounds.add(background);
+  }
 }
 
 function dimCharacterRatio(rows) {
@@ -37,8 +62,8 @@ function dimCharacterRatio(rows) {
 export function isTransientComposer(rows) {
   const text = panelText(rows);
   const first = rows.find((row) => row.text.trim())?.text.trimStart() || "";
-  const hasPromptMarker = /^[›❯>]\s?/.test(first);
+  const marked = hasPromptMarker(first);
   return !text
     || isDefaultSuggestion(text)
-    || (hasPromptMarker && dimCharacterRatio(rows) >= 0.6);
+    || (marked && dimCharacterRatio(rows) >= 0.6);
 }

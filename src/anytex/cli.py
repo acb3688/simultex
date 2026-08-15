@@ -6,7 +6,6 @@ import argparse
 import os
 import shutil
 import sys
-import time
 from pathlib import Path
 
 from . import __version__
@@ -168,7 +167,6 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"anytex: cannot start browser companion: {exc}") from None
         with companion:
             print(f"anytex: browser companion: {companion.url}", file=sys.stderr)
-            time.sleep(10)
             return _run(
                 command,
                 transform=None,

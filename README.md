@@ -76,14 +76,16 @@ graphics escapes, placeholder characters, or any other modified output to the
 main terminal.
 
 The browser is a rich transcript, not a pixel-perfect second terminal. AnyTeX
-uses Codex's full-width user panels and assistant markers as message boundaries;
-output that does not look like a message remains fixed-width terminal HTML. Only
-the active message is reparsed while it streams. As soon as the next message
-boundary appears, the completed message receives a permanent ID and is detached
-from the VT buffer; later terminal repainting, reflow, and input cannot rerender
-it. Incomplete or invalid math stays visible as one source block instead of being
-rendered as broken fragments. Because this mode observes the terminal, Markdown
-syntax removed completely by the child cannot be recovered.
+uses Codex's full-width user panels and Claude Code's `❯`/`⏺` markers as message
+boundaries; output that does not look like a message remains fixed-width terminal
+HTML. The live composer remains visible as terminal UI, while submitted prompts
+and responses become Markdown messages. Only the active message is reparsed while
+it streams. As soon as the next message boundary appears, the completed message
+receives a permanent ID and is detached from the VT buffer; later terminal
+repainting, reflow, and input cannot rerender it. Incomplete or invalid math stays
+visible as one source block instead of being rendered as broken fragments.
+Because this mode observes the terminal, Markdown syntax removed completely by
+the child cannot be recovered.
 
 For a dark terminal, the default near-white equation color is appropriate. For
 a light terminal, choose a dark color:

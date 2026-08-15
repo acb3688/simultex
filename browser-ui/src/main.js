@@ -2,7 +2,13 @@ import { Terminal } from "@xterm/xterm";
 import MarkdownIt from "markdown-it";
 import katex from "katex";
 import "katex/dist/katex.css";
-import { isTransientComposer } from "./codex-chrome.js";
+import {
+  hasAssistantMarker,
+  hasPromptMarker,
+  isTransientComposer,
+  isUserPanel,
+  rememberPromptBackground,
+} from "./codex-chrome.js";
 import { normalizeTerminalMath } from "./latex-normalize.js";
 import { MessageRecords } from "./message-records.js";
 import "./style.css";
@@ -247,6 +253,7 @@ let renderFrame;
 let settledRenderTimer;
 const messageRecords = new MessageRecords();
 const nodes = new Map();
+const promptBackgrounds = new Set();
 
 function paletteColor(index) {
   if (index < ANSI_COLORS.length) return ANSI_COLORS[index];
@@ -441,7 +448,7 @@ function markdownSource(rows, kind) {
   if (first >= 0) {
     normalized[first] = kind === "user"
       ? normalized[first].replace(/^\s*[›❯>]\s?/, "")
-      : normalized[first].replace(/^\s*[•·]\s?/, "");
+      : normalized[first].replace(/^\s*[•·●⏺]\s?/, "");
   }
   return normalized.join("\n").trim();
 }
@@ -479,13 +486,49 @@ function findPanelRanges(startAt = 0) {
     while (end < snapshots.length && snapshots[end].rowBackground !== DEFAULT_BACKGROUND) end += 1;
     const rows = snapshots.slice(start, end);
     const first = rows.find((row) => row.text.trim())?.text.trimStart() || "";
+    const background = rangeBackground(rows);
+    const marker = hasPromptMarker(first);
+    const transient = isTransientComposer(rows);
+    rememberPromptBackground(
+      marker,
+      transient,
+      background,
+      DEFAULT_BACKGROUND,
+      promptBackgrounds,
+    );
     ranges.push({
       start,
       end,
-      user: /^[›❯>]\s?/.test(first),
-      transient: isTransientComposer(rows),
+      background,
+      marker,
+      transient,
     });
     start = end;
+  }
+
+  // Claude Code uses a prompt marker between divider rows rather than Codex's
+  // full-width background. Capture the marked logical line as a panel too.
+  // Wrapped continuation rows have isWrapped set on the continuation line.
+  const coveredRows = new Set(ranges.flatMap(
+    (range) => Array.from({ length: range.end - range.start }, (_, index) => range.start + index),
+  ));
+  for (let start = startAt; start < snapshots.length; start += 1) {
+    if (coveredRows.has(start) || !hasPromptMarker(snapshots[start].text)) continue;
+    let end = start + 1;
+    while (end < snapshots.length && snapshots[end].wrapped && !coveredRows.has(end)) end += 1;
+    const rows = snapshots.slice(start, end);
+    ranges.push({
+      start,
+      end,
+      background: rangeBackground(rows),
+      marker: true,
+      transient: isTransientComposer(rows),
+    });
+    start = end - 1;
+  }
+  ranges.sort((left, right) => left.start - right.start);
+  for (const range of ranges) {
+    range.user = isUserPanel(range.marker, range.background, promptBackgrounds);
   }
   return ranges;
 }
@@ -499,12 +542,22 @@ function isCodexProgressLine(text) {
   return /^\s*[•·]\s+(?:Working|Starting MCP servers)\b.*(?:esc to interrupt)/i.test(text);
 }
 
+function isTuiDivider(text) {
+  return /^\s*[─━]{8,}\s*$/.test(text);
+}
+
+function isClaudeStatusLine(text) {
+  return /^\s*(?:⏸|⏵)\s+.*(?:mode on|for shortcuts|for agents)/i.test(text);
+}
+
 function filteredRows(start, end, excludedRows, stripChrome = false) {
   const rows = [];
   for (let row = start; row < end; row += 1) {
     if (excludedRows.has(row)) continue;
     if (stripChrome && (isCodexStatusLine(snapshots[row].text)
-      || isCodexProgressLine(snapshots[row].text))) continue;
+      || isCodexProgressLine(snapshots[row].text)
+      || isClaudeStatusLine(snapshots[row].text)
+      || isTuiDivider(snapshots[row].text))) continue;
     rows.push(snapshots[row]);
   }
   return rows;
@@ -513,7 +566,9 @@ function filteredRows(start, end, excludedRows, stripChrome = false) {
 function firstAssistantMarker(start, end) {
   for (let row = start; row < end; row += 1) {
     const text = snapshots[row].text;
-    if (!isCodexStatusLine(text) && /^\s*[•·]\s?/.test(text)) return row;
+    if (!isCodexStatusLine(text)
+      && !isCodexProgressLine(text)
+      && hasAssistantMarker(text)) return row;
   }
   return -1;
 }
@@ -582,26 +637,26 @@ function addDefaultRange(models, start, end, asAssistant, cursorRow, excludedRow
 function buildModels(cursorRow, startAt = 0) {
   const models = [];
   const panelRanges = findPanelRanges(startAt);
-  const transientRanges = panelRanges.filter((range) => range.transient);
-  const excludedRows = new Set(transientRanges.flatMap(
-    (range) => Array.from({ length: range.end - range.start }, (_, index) => range.start + index),
-  ));
+  // Composer panels are part of the useful mirror even though they are not
+  // conversation messages. Segment them from the surrounding transcript so
+  // their prompt background and live terminal styling remain visible without
+  // allowing placeholder text to leak into an assistant Markdown block.
+  const visiblePanelRanges = panelRanges.filter((range) => range.user || range.transient);
+  const excludedRows = new Set();
   const userRanges = panelRanges.filter((range) => range.user && !range.transient);
   let position = startAt;
   let haveUser = messageRecords.committed.some((record) => record.messageRole === "user");
   let activeUserTail = false;
 
-  // The splash screen, MCP startup progress, empty composer, and default
-  // suggestions are VT chrome rather than conversation content. The browser
-  // header already reports connection state, so wait for the first real prompt
-  // instead of flashing a half-painted terminal during startup.
-  if (!haveUser && userRanges.length === 0) return models;
-
-  for (let index = 0; index < userRanges.length; index += 1) {
-    const range = userRanges[index];
+  for (const range of visiblePanelRanges) {
     addDefaultRange(models, position, range.start, haveUser, cursorRow, excludedRows);
+    if (range.transient) {
+      pushModel(models, terminalModel(range.start, range.end, excludedRows, true));
+      position = range.end;
+      continue;
+    }
     const cursorInside = cursorRow >= range.start && cursorRow < range.end;
-    const isLatest = index === userRanges.length - 1;
+    const isLatest = range === userRanges[userRanges.length - 1];
     const tailHasResponse = isLatest && snapshots.slice(range.end).some(
       (row) => row.text.trim() && !isCodexStatusLine(row.text),
     );
@@ -724,8 +779,12 @@ function reconcile(models) {
 function renderTranscript() {
   const { cursorRow } = captureBuffer();
   const models = buildModels(cursorRow, messageRecords.startRow);
-  reconcile(messageRecords.update(models, freezeBefore(models)));
+  const records = messageRecords.update(models, freezeBefore(models));
+  reconcile(records);
   transcript.style.setProperty("--terminal-columns", terminal.cols);
+  // If the candidate changed during the settle pass, give it another bounded
+  // pass. This self-flushes the final repaint without polling forever.
+  if (models.length && messageRecords.pendingFreeze) scheduleSettledRender();
 }
 
 if (!token) {
