@@ -9,7 +9,7 @@ description = "A PTY proxy that renders LaTeX as transparent terminal images"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "acb3688" }]
+authors = [{ name = "William Wang" }]
 dependencies = [
     "fastapi>=0.115,<1",
     "httpx>=0.27,<1",
