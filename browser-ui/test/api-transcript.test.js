@@ -224,6 +224,36 @@ test("duplicate PTY copies of an authoritative user message are removed", () => 
   assert.equal(reconciled[0].authoritative, true);
 });
 
+test("an abandoned provider retry does not create a duplicate user turn", () => {
+  const transcript = new ApiTranscript();
+  const prompt = String.raw`$$\int x^2 \; dx$$`;
+  beginTurn(transcript, "turn-1", prompt, 1);
+  transcript.accept(event("call.started", {
+    turn_id: "turn-1",
+    call_id: "call-1",
+  }));
+  transcript.accept(event("turn.completed", { turn_id: "turn-1" }));
+  beginTurn(transcript, "turn-2", prompt, 2);
+  completeCall(transcript, "turn-2", "call-2", "`x³/3 + C`");
+
+  const reconciled = transcript.reconcile([
+    record("user", prompt, 39),
+    record("user", prompt, 39),
+    record("assistant", "x³/3 + C", 39),
+    record("terminal", "❯", 39, { panel: true, messageRole: "user" }),
+  ]);
+
+  assert.deepEqual(
+    reconciled.map((item) => [item.kind, item.source]),
+    [
+      ["user", prompt],
+      ["assistant", "`x³/3 + C`"],
+      ["terminal", "❯"],
+    ],
+  );
+  assert.equal(reconciled[0].apiTurnId, "turn-2");
+});
+
 test("a misclassified LaTeX prompt still produces one stable API turn", () => {
   const transcript = new ApiTranscript();
   const prompt = String.raw`$\int x^2 \; dx$, can you solve it?`;

@@ -92,6 +92,22 @@ function nextMatchedUser(turns, matches, start, fallback) {
   return fallback;
 }
 
+function isAbandonedDuplicate(turn, nextTurn) {
+  if (!turn.completed || !nextTurn) return false;
+  if (turn.sessionId !== nextTurn.sessionId
+    || turn.provider !== nextTurn.provider
+    || turn.userMarkdown !== nextTurn.userMarkdown) {
+    return false;
+  }
+  return turn.calls.length > 0 && turn.calls.every((call) => (
+    !call.completed && !callMarkdown(call)
+  ));
+}
+
+function displayTurns(turns) {
+  return turns.filter((turn, index) => !isAbandonedDuplicate(turn, turns[index + 1]));
+}
+
 function trailingUiBoundary(records, start, end) {
   for (let index = start; index < end; index += 1) {
     const record = records[index];
@@ -197,7 +213,9 @@ export class ApiTranscript {
   }
 
   reconcile(records) {
-    const turns = this.turns.filter((turn) => typeof turn.userMarkdown === "string");
+    const turns = displayTurns(
+      this.turns.filter((turn) => typeof turn.userMarkdown === "string"),
+    );
     if (!turns.length) return records;
 
     const matches = alignUsers(turns, records);
