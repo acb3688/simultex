@@ -499,11 +499,17 @@ def _is_anthropic_internal_context(user_markdown: str) -> bool:
     )
 
 
-def _is_anthropic_auxiliary_request(user_markdown: str | None) -> bool:
+def _is_anthropic_auxiliary_request(
+    user_markdown: str | None, payload: dict[str, Any] | None = None
+) -> bool:
     if user_markdown is None:
         return False
     stripped = user_markdown.strip()
     if stripped == "quota":
+        return True
+    if _is_anthropic_web_search_request(payload):
+        return True
+    if _is_anthropic_web_fetch_request(stripped, payload):
         return True
     if stripped.startswith(
         "[SUGGESTION MODE: Suggest what the user might naturally type next into Claude Code.]"
@@ -513,6 +519,66 @@ def _is_anthropic_auxiliary_request(user_markdown: str | None) -> bool:
         stripped.startswith("<session>")
         and "</session>" in stripped
         and "Write the title in the predominant language of the session" in stripped
+    )
+
+
+def _is_anthropic_web_search_request(payload: dict[str, Any] | None) -> bool:
+    """Recognize Claude Code's isolated model call that drives WebSearch."""
+
+    if payload is None:
+        return False
+    messages = payload.get("messages")
+    if (
+        not isinstance(messages, list)
+        or len(messages) != 1
+        or not isinstance(messages[0], dict)
+        or messages[0].get("role") != "user"
+    ):
+        return False
+    tool_choice = payload.get("tool_choice")
+    if not isinstance(tool_choice, dict) or tool_choice.get("name") != "web_search":
+        return False
+    tools = payload.get("tools")
+    if not isinstance(tools, list):
+        return False
+    return any(
+        isinstance(tool, dict)
+        and (
+            tool.get("name") == "web_search"
+            or (
+                isinstance(tool.get("type"), str)
+                and tool["type"].startswith("web_search_")
+            )
+        )
+        for tool in tools
+    )
+
+
+def _is_anthropic_web_fetch_request(
+    user_markdown: str, payload: dict[str, Any] | None
+) -> bool:
+    """Recognize Claude Code's isolated model call that summarizes WebFetch data."""
+
+    if payload is None:
+        return False
+    messages = payload.get("messages")
+    if (
+        not isinstance(messages, list)
+        or len(messages) != 1
+        or not isinstance(messages[0], dict)
+        or messages[0].get("role") != "user"
+        or payload.get("tools") not in (None, [])
+    ):
+        return False
+    if not user_markdown.startswith("Web page content:\n"):
+        return False
+    return (
+        "\nProvide a concise response based only on the content above. In your response:"
+        in user_markdown
+        or user_markdown.endswith(
+            "Provide a concise response based on the content above. Include relevant "
+            "details, code examples, and documentation excerpts as needed."
+        )
     )
 
 
@@ -724,7 +790,9 @@ class ModelApiProxy:
         if not isinstance(payload, dict):
             payload = {}
         user_markdown, continuation = _request_details(self.provider, payload)
-        if self.provider == "anthropic" and _is_anthropic_auxiliary_request(user_markdown):
+        if self.provider == "anthropic" and _is_anthropic_auxiliary_request(
+            user_markdown, payload
+        ):
             return None, payload.get("stream") is True
         context = self.coordinator.begin_call(self.provider, user_markdown, continuation)
         return context, payload.get("stream") is True

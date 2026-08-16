@@ -201,6 +201,68 @@ Write the title in the predominant language of the session"""
         )
         self.assertFalse(_is_anthropic_auxiliary_request("Explain session handling"))
 
+    def test_anthropic_web_search_model_call_is_recognized_structurally(self) -> None:
+        prompt = (
+            "Perform a web search for the query: "
+            "Jacobian conjecture disproved counterexample 2026"
+        )
+        payload = {
+            "messages": [{"role": "user", "content": prompt}],
+            "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+            "tool_choice": {"type": "tool", "name": "web_search"},
+        }
+
+        self.assertTrue(_is_anthropic_auxiliary_request(prompt, payload))
+        self.assertFalse(_is_anthropic_auxiliary_request(prompt))
+        self.assertFalse(
+            _is_anthropic_auxiliary_request(
+                prompt,
+                {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "tools": [{"name": "WebSearch"}],
+                    "tool_choice": {"type": "auto"},
+                },
+            )
+        )
+
+    def test_anthropic_web_fetch_model_call_is_recognized_by_its_envelope(self) -> None:
+        prompt = """Web page content:
+---
+An article copied from a web page.
+---
+
+Summarize the result.
+
+Provide a concise response based only on the content above. In your response:
+ - Enforce a strict 125-character maximum for quotes from any source document.
+"""
+        payload = {"messages": [{"role": "user", "content": prompt}]}
+
+        self.assertTrue(_is_anthropic_auxiliary_request(prompt, payload))
+        self.assertFalse(_is_anthropic_auxiliary_request(prompt))
+        self.assertFalse(
+            _is_anthropic_auxiliary_request(
+                prompt,
+                {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "tools": [{"name": "Bash"}],
+                },
+            )
+        )
+        self.assertFalse(
+            _is_anthropic_auxiliary_request(
+                "Web page content:\nPlease review this text I pasted.",
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "Web page content:\nPlease review this text I pasted.",
+                        }
+                    ]
+                },
+            )
+        )
+
     def test_anthropic_system_reminders_are_removed_from_user_text(self) -> None:
         source = """<system-reminder>
 # currentDate
