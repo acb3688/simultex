@@ -232,6 +232,105 @@ Internal instructions that should not become a user message.
             (None, True),
         )
 
+    def test_anthropic_meta_text_after_skill_result_is_continuation_context(self) -> None:
+        internal = """Approach this as the design lead at a small studio.
+
+## Fundamentals for every artifact
+
+Internal instructions that should not become a user message.
+"""
+        messages = [
+            {"role": "user", "content": "Build a diagram"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu-skill",
+                        "name": "Skill",
+                        "input": {"skill": "artifact-design"},
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu-skill",
+                        "content": "Launching skill: artifact-design",
+                    }
+                ],
+            },
+            {"role": "user", "content": [{"type": "text", "text": internal}]},
+        ]
+
+        self.assertEqual(
+            _request_details("anthropic", {"messages": messages}),
+            (None, True),
+        )
+
+    def test_anthropic_skill_result_and_meta_text_can_share_a_message(self) -> None:
+        messages = [
+            {"role": "user", "content": "Build a diagram"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu-skill",
+                        "name": "Skill",
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu-skill",
+                        "content": "Launching skill: artifact-design",
+                    },
+                    {
+                        "type": "text",
+                        "text": "Internal artifact design instructions",
+                    },
+                ],
+            },
+        ]
+
+        self.assertEqual(
+            _request_details("anthropic", {"messages": messages}),
+            (None, True),
+        )
+
+    def test_anthropic_text_after_an_ordinary_tool_is_not_hidden(self) -> None:
+        messages = [
+            {"role": "user", "content": "Inspect it"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "id": "toolu-read", "name": "Read"}
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu-read",
+                        "content": "done",
+                    }
+                ],
+            },
+            {"role": "user", "content": "Now explain the result"},
+        ]
+
+        self.assertEqual(
+            _request_details("anthropic", {"messages": messages}),
+            ("Now explain the result", False),
+        )
+
     def test_anthropic_image_metadata_is_continuation_context(self) -> None:
         source = (
             "[Image: original 2210x1462, displayed at 2000x1323. "

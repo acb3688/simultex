@@ -409,7 +409,9 @@ def _request_details(provider: str, payload: dict[str, Any]) -> tuple[str | None
             if current_text is not None:
                 cleaned = _strip_anthropic_system_messages(current_text)
                 if cleaned:
-                    if _is_anthropic_internal_context(cleaned):
+                    if _is_anthropic_internal_context(
+                        cleaned
+                    ) or _follows_anthropic_skill_tool(messages, index):
                         return None, True
                     return cleaned, False
             for prior in reversed(messages[:index]):
@@ -427,10 +429,54 @@ def _request_details(provider: str, payload: dict[str, Any]) -> tuple[str | None
         if text is None:
             return None, True
         cleaned = _strip_anthropic_system_messages(text)
-        if _is_anthropic_internal_context(cleaned):
+        if _is_anthropic_internal_context(cleaned) or _follows_anthropic_skill_tool(
+            messages, index
+        ):
             return None, True
         return (cleaned, False) if cleaned else (None, True)
     return None, True
+
+
+def _follows_anthropic_skill_tool(messages: list[Any], user_index: int) -> bool:
+    """Recognize skill instructions that Claude Code records as meta user text."""
+
+    result_ids: set[str] = set()
+    first_result_index = user_index
+    for index in range(user_index, -1, -1):
+        message = messages[index]
+        if not isinstance(message, dict) or message.get("role") != "user":
+            break
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict) or part.get("type") != "tool_result":
+                continue
+            tool_use_id = part.get("tool_use_id")
+            if isinstance(tool_use_id, str):
+                result_ids.add(tool_use_id)
+                first_result_index = index
+    if not result_ids:
+        return False
+
+    for message in reversed(messages[:first_result_index]):
+        if not isinstance(message, dict):
+            continue
+        if message.get("role") == "user":
+            break
+        if message.get("role") != "assistant":
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        return any(
+            isinstance(part, dict)
+            and part.get("type") == "tool_use"
+            and part.get("name") == "Skill"
+            and part.get("id") in result_ids
+            for part in content
+        )
+    return False
 
 
 def _strip_anthropic_system_messages(user_markdown: str) -> str:
