@@ -15,16 +15,30 @@ terminal session while SimulTeX mirrors it on a private localhost URL.
 
 ## Quick start
 
-SimulTeX requires Python 3.10 or newer. From this repository:
+SimulTeX requires Python 3.10 or newer. Install it with pipx (recommended for a
+CLI application):
 
 ```sh
-python3 -m pip install -e .
-simultex -- codex
+pipx install simultex
 ```
 
-Claude Code works the same way:
+Or install it into your current Python environment:
 
 ```sh
+python3 -m pip install simultex
+```
+
+Both methods reject unsupported Python versions. If pipx selects an older
+interpreter, choose one explicitly:
+
+```sh
+pipx install --python python3.11 simultex
+```
+
+Launch Codex or Claude Code through SimulTeX:
+
+```sh
+simultex -- codex
 simultex -- claude
 ```
 
@@ -67,9 +81,14 @@ unknown format, startup continues with the PTY-derived transcript.
 - **Search like a web page.** Search the entire conversation with
   <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>F</kbd>, scroll freely, and select or copy
   content without fighting terminal history.
+- **Share a live view.** Let students or collaborators follow the conversation
+  as it happens through screen sharing or a secure localhost tunnel.
 - **Let the agent focus on the answer.** The agent answers in Markdown;
   SimulTeX handles consistent rendering without asking it to author and style an
   HTML artifact.
+- **Customize the presentation.** Because the companion is built with HTML and
+  CSS, you can adapt its layout and styling without changing how the agent
+  responds.
 - **Export as HTML.** Download the current conversation as a
   self-contained HTML file directly from the companion page.
 - **Keep control in the terminal.** The companion is read-only, so
@@ -143,8 +162,8 @@ otherwise their original URLs remain in the file.
 ## Privacy and security
 
 - **Local and private by default.** SimulTeX listens only on `127.0.0.1`, and the
-  live transcript requires the random token in the printed URL. Keep that URL
-  private.
+  live transcript requires the random token in the printed URL. Share it only
+  with people you trust and only through a secure tunnel.
 - **Read-only companion.** The browser cannot control the child process, and API
   routing changes apply only to the launched command—not your global Codex or
   Claude configuration.
@@ -166,6 +185,7 @@ otherwise their original URLs remain in the file.
 ## Development
 
 ```sh
+python3 -m pip install -e .
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 cd browser-ui && npm install && npm test && npm run build
 PYTHONPATH=src python3 scripts/replay_capture.py /path/to/codex.raw
