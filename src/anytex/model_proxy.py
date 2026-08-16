@@ -409,6 +409,8 @@ def _request_details(provider: str, payload: dict[str, Any]) -> tuple[str | None
             if current_text is not None:
                 cleaned = _strip_anthropic_system_messages(current_text)
                 if cleaned:
+                    if _is_anthropic_internal_context(cleaned):
+                        return None, True
                     return cleaned, False
             for prior in reversed(messages[:index]):
                 if not isinstance(prior, dict) or prior.get("role") != "user":
@@ -417,12 +419,16 @@ def _request_details(provider: str, payload: dict[str, Any]) -> tuple[str | None
                 if text is not None:
                     cleaned = _strip_anthropic_system_messages(text)
                     if cleaned:
+                        if _is_anthropic_internal_context(cleaned):
+                            continue
                         return cleaned, True
             return None, True
         text = _content_text(content, {"text"})
         if text is None:
             return None, True
         cleaned = _strip_anthropic_system_messages(text)
+        if _is_anthropic_internal_context(cleaned):
+            return None, True
         return (cleaned, False) if cleaned else (None, True)
     return None, True
 
@@ -433,6 +439,18 @@ def _strip_anthropic_system_messages(user_markdown: str) -> str:
         "",
         user_markdown,
     ).strip()
+
+
+def _is_anthropic_internal_context(user_markdown: str) -> bool:
+    stripped = user_markdown.strip()
+    return bool(
+        re.match(r"Base directory for this skill: [^\n]+\n\n\S", stripped)
+        or re.fullmatch(
+            r"\[Image: original \d+x\d+, displayed at \d+x\d+\. "
+            r"Multiply coordinates by \d+(?:\.\d+)? to map to original image\.\]",
+            stripped,
+        )
+    )
 
 
 def _is_anthropic_auxiliary_request(user_markdown: str | None) -> bool:

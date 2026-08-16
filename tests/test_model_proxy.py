@@ -218,6 +218,34 @@ Yo"""
             ("Yo", False),
         )
 
+    def test_anthropic_skill_body_is_continuation_context(self) -> None:
+        source = """Base directory for this skill: /tmp/bundled-skills/hash/dataviz
+
+Internal instructions that should not become a user message.
+"""
+
+        self.assertEqual(
+            _request_details(
+                "anthropic",
+                {"messages": [{"role": "user", "content": source}]},
+            ),
+            (None, True),
+        )
+
+    def test_anthropic_image_metadata_is_continuation_context(self) -> None:
+        source = (
+            "[Image: original 2210x1462, displayed at 2000x1323. "
+            "Multiply coordinates by 1.10 to map to original image.]"
+        )
+
+        self.assertEqual(
+            _request_details(
+                "anthropic",
+                {"messages": [{"role": "user", "content": source}]},
+            ),
+            (None, True),
+        )
+
 
 class AdapterTests(unittest.TestCase):
     def test_openai_sse_is_chunk_safe_and_preserves_exact_tex(self) -> None:
