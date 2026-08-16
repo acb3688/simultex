@@ -72,6 +72,11 @@ test("keeps a composer active while its own panel owns the cursor", () => {
   assert.equal(isActiveComposer(true, true, true), true);
 });
 
+test("submits a bright panel when a newer empty composer has appeared", () => {
+  assert.equal(isActiveComposer(false, true, false, true), false);
+  assert.equal(isActiveComposer(true, true, false, true), false);
+});
+
 test("recovers a visible unanswered composer before the frozen row watermark", () => {
   const ranges = [
     { start: 20, end: 23, marker: true },

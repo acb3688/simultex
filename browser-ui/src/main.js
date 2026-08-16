@@ -731,7 +731,18 @@ function buildModels(cursorRow, startAt = 0) {
     // freeze a draft as a completed user message.
     const tailHasAssistant = isLatest
       && firstAssistantMarker(range.end, snapshots.length) >= 0;
-    const active = isActiveComposer(cursorInside, isLatest, tailHasAssistant);
+    // Codex may append its new empty composer before API turn.started arrives.
+    // That newer transient panel proves this bright panel was submitted, even
+    // though no assistant marker exists yet.
+    const hasLaterComposer = visiblePanelRanges.some(
+      (candidate) => candidate.start >= range.end && candidate.transient,
+    );
+    const active = isActiveComposer(
+      cursorInside,
+      isLatest,
+      tailHasAssistant,
+      hasLaterComposer,
+    );
     if (active) {
       pushModel(models, terminalModel(range.start, range.end, excludedRows, true, "user"));
       activeUserTail = true;

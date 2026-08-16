@@ -14,7 +14,13 @@ export function hasAssistantMarker(text) {
   return /^[•·●⏺]\s?/.test(text.trimStart());
 }
 
-export function isActiveComposer(cursorInside, isLatest, tailHasAssistant) {
+export function isActiveComposer(
+  cursorInside,
+  isLatest,
+  tailHasAssistant,
+  hasLaterComposer = false,
+) {
+  if (hasLaterComposer) return false;
   return cursorInside || (isLatest && !tailHasAssistant);
 }
 
