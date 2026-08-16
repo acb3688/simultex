@@ -85,7 +85,7 @@ def run_proxy(
                 dict(os.environ if child_env is None else child_env),
             )
         except OSError as exc:
-            print(f"anytex: cannot run {command[0]!r}: {exc}", file=sys.stderr)
+            print(f"simultex: cannot run {command[0]!r}: {exc}", file=sys.stderr)
         os._exit(127)
 
     input_fd = sys.stdin.fileno()

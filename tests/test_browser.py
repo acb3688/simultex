@@ -10,8 +10,8 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-from anytex.browser import BrowserCompanion, _Event, _EventBus
-from anytex.cli import _wait_for_browser_url, build_parser
+from simultex.browser import BrowserCompanion, _Event, _EventBus
+from simultex.cli import _wait_for_browser_url, build_parser
 
 
 class EventBusTests(unittest.TestCase):
@@ -58,7 +58,7 @@ class BrowserCompanionTests(unittest.TestCase):
             with urlopen(companion.url, timeout=2) as response:
                 body = response.read().decode("utf-8")
 
-        self.assertIn("AnyTeX Browser Companion", body)
+        self.assertIn("SimulTeX Browser Companion", body)
         self.assertIn("parseDollars", body)
         self.assertIn("false", body)
         self.assertIn('id="transcript"', body)

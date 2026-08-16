@@ -1,6 +1,6 @@
 import unittest
 
-from anytex.stream import LatexStreamParser
+from simultex.stream import LatexStreamParser
 
 
 class StreamParserTests(unittest.TestCase):

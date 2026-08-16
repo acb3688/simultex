@@ -1,8 +1,8 @@
 import unittest
 
-from anytex.protocol import KittyGraphics, TerminalGeometry
-from anytex.render import RenderedImage
-from anytex.screen import ScreenLatexOverlay, find_equations
+from simultex.protocol import KittyGraphics, TerminalGeometry
+from simultex.render import RenderedImage
+from simultex.screen import ScreenLatexOverlay, find_equations
 
 
 class _Renderer:

@@ -3,8 +3,8 @@ import os
 import unittest
 from unittest.mock import patch
 
-from anytex.protocol import KittyGraphics, TerminalGeometry, supports_kitty_graphics
-from anytex.render import RenderedImage
+from simultex.protocol import KittyGraphics, TerminalGeometry, supports_kitty_graphics
+from simultex.render import RenderedImage
 
 
 class ProtocolTests(unittest.TestCase):

@@ -1,4 +1,4 @@
-"""Command-line entry point for anytex."""
+"""Command-line entry point for simultex."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _hex_color(value: str) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="anytex",
+        prog="simultex",
         description="Run a command in a PTY and replace LaTeX with terminal images.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -160,7 +160,7 @@ def _wait_for_browser_url(
     if provider != "anthropic" or seconds <= 0:
         return
     print(
-        f"anytex: Claude starts in {seconds} seconds; "
+        f"simultex: Claude starts in {seconds} seconds; "
         "copy or open the browser companion URL now",
         file=sys.stderr,
         flush=True,
@@ -171,20 +171,20 @@ def _wait_for_browser_url(
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if not 50 <= args.dpi <= 600:
-        raise SystemExit("anytex: --dpi must be between 50 and 600")
+        raise SystemExit("simultex: --dpi must be between 50 and 600")
     if not 1 <= args.inline_rows <= 4:
-        raise SystemExit("anytex: --inline-rows must be between 1 and 4")
+        raise SystemExit("simultex: --inline-rows must be between 1 and 4")
     if not 1 <= args.max_rows <= 50:
-        raise SystemExit("anytex: --max-rows must be between 1 and 50")
+        raise SystemExit("simultex: --max-rows must be between 1 and 50")
     if not 0 <= args.browser_port <= 65535:
-        raise SystemExit("anytex: --browser-port must be between 0 and 65535")
+        raise SystemExit("simultex: --browser-port must be between 0 and 65535")
     if args.keep_latex and args.parser == "screen":
-        raise SystemExit("anytex: --keep-latex requires --parser stream")
+        raise SystemExit("simultex: --keep-latex requires --parser stream")
     if args.api_upstream:
         try:
             args.api_upstream = validate_upstream(args.api_upstream)
         except ValueError as exc:
-            raise SystemExit(f"anytex: {exc}") from None
+            raise SystemExit(f"simultex: {exc}") from None
     if args.check:
         return _check(args)
     command = args.command
@@ -201,9 +201,9 @@ def main(argv: list[str] | None = None) -> int:
                 parse_dollars=not args.no_dollar,
             )
         except OSError as exc:
-            raise SystemExit(f"anytex: cannot start browser companion: {exc}") from None
+            raise SystemExit(f"simultex: cannot start browser companion: {exc}") from None
         with companion:
-            print(f"anytex: browser companion: {companion.url}", file=sys.stderr)
+            print(f"simultex: browser companion: {companion.url}", file=sys.stderr)
             provider = None if args.no_api_proxy else detect_provider(command)
             if provider is not None:
                 try:
@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
                             model_proxy.url,
                         )
                         print(
-                            f"anytex: using authoritative {provider} API transcript events",
+                            f"simultex: using authoritative {provider} API transcript events",
                             file=sys.stderr,
                         )
                         _wait_for_browser_url(provider)
@@ -232,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
                         )
                 except OSError as exc:
                     raise SystemExit(
-                        f"anytex: cannot start model API proxy: {exc}"
+                        f"simultex: cannot start model API proxy: {exc}"
                     ) from None
             return _run(
                 command,
@@ -245,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     if not enabled:
         if args.graphics == "auto":
             print(
-                "anytex: this terminal has no supported inline-image protocol; "
+                "simultex: this terminal has no supported inline-image protocol; "
                 "passing output through unchanged (use Kitty or Ghostty)",
                 file=sys.stderr,
             )
@@ -266,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
             image = renderer.render(math, block)
         except RenderError as exc:
             if args.verbose or not warned:
-                print(f"\r\nanytex: could not render equation: {exc}\r", file=sys.stderr)
+                print(f"\r\nsimultex: could not render equation: {exc}\r", file=sys.stderr)
                 warned = True
             return None
         rendered = graphics.encode(image, block)
@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         def screen_error(exc: RenderError) -> None:
             nonlocal warned
             if args.verbose or not warned:
-                print(f"\r\nanytex: could not render equation: {exc}\r", file=sys.stderr)
+                print(f"\r\nsimultex: could not render equation: {exc}\r", file=sys.stderr)
                 warned = True
 
         transform = ScreenLatexOverlay(
@@ -311,10 +311,10 @@ def _run(
     try:
         capture = capture_path.open("xb")
     except FileExistsError:
-        raise SystemExit(f"anytex: capture file already exists: {capture_path}") from None
+        raise SystemExit(f"simultex: capture file already exists: {capture_path}") from None
     except OSError as exc:
-        raise SystemExit(f"anytex: cannot create capture file {capture_path}: {exc}") from None
-    print(f"anytex: capturing raw child output in {capture_path}", file=sys.stderr)
+        raise SystemExit(f"simultex: cannot create capture file {capture_path}: {exc}") from None
+    print(f"simultex: capturing raw child output in {capture_path}", file=sys.stderr)
     try:
         return run_proxy(
             command,

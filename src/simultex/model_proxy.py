@@ -361,15 +361,15 @@ def route_child(
     elif provider == "openai":
         routed[1:1] = [
             "-c",
-            'model_provider="anytex"',
+            'model_provider="simultex"',
             "-c",
-            'model_providers.anytex.name="AnyTeX OpenAI proxy"',
+            'model_providers.simultex.name="SimulTeX OpenAI proxy"',
             "-c",
-            f"model_providers.anytex.base_url={json.dumps(proxy_url)}",
+            f"model_providers.simultex.base_url={json.dumps(proxy_url)}",
             "-c",
-            "model_providers.anytex.requires_openai_auth=true",
+            "model_providers.simultex.requires_openai_auth=true",
             "-c",
-            "model_providers.anytex.supports_websockets=false",
+            "model_providers.simultex.supports_websockets=false",
         ]
     else:
         raise ValueError(f"unsupported provider: {provider}")
@@ -521,7 +521,7 @@ class ModelApiProxy:
         self._thread = threading.Thread(
             target=self._server.run,
             kwargs={"sockets": [self._socket]},
-            name="anytex-model-proxy",
+            name="simultex-model-proxy",
             daemon=True,
         )
 

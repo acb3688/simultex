@@ -6,31 +6,31 @@
 
 **A browser companion for Codex CLI and Claude Code.**
 
-AnyTeX preserves the native terminal UI while turning the conversation into a
+SimulTeX preserves the native terminal UI while turning the conversation into a
 readable, scrollable browser transcript. Prompts and responses render as rich
 Markdown; terminal chrome, composers, status indicators, tool activity, and
 permission panels remain recognizable alongside them.
 
 The browser is read-only. You continue working in the real Codex or Claude
-terminal session while AnyTeX mirrors it on a private localhost URL.
+terminal session while SimulTeX mirrors it on a private localhost URL.
 
 ## Quick start
 
-AnyTeX requires Python 3.10 or newer. From this repository:
+SimulTeX requires Python 3.10 or newer. From this repository:
 
 ```sh
 python3 -m pip install -e .
-anytex --browser -- codex
+simultex --browser -- codex
 ```
 
 Claude Code works the same way:
 
 ```sh
-anytex --browser -- claude
+simultex --browser -- claude
 ```
 
-Open the token-bearing URL printed by AnyTeX. Keyboard input stays in the
-terminal; the browser follows the session live. AnyTeX gives Claude Code a
+Open the token-bearing URL printed by SimulTeX. Keyboard input stays in the
+terminal; the browser follows the session live. SimulTeX gives Claude Code a
 ten-second startup pause so you have time to open or copy the URL.
 
 ## What you get
@@ -51,20 +51,20 @@ ten-second startup pause so you have time to open or copy the URL.
 
 ```mermaid
 flowchart LR
-    TUI[Codex or Claude TUI] -->|PTY output| AnyTeX
-    AnyTeX -->|unchanged terminal stream| Terminal
-    AnyTeX -->|VT reconstruction| Browser[Browser companion]
+    TUI[Codex or Claude TUI] -->|PTY output| SimulTeX
+    SimulTeX -->|unchanged terminal stream| Terminal
+    SimulTeX -->|VT reconstruction| Browser[Browser companion]
     TUI -->|model API traffic| Proxy[Local reverse proxy]
     Proxy -->|normalized transcript events| Browser
     Proxy <-->|streaming request and response| Provider[Model provider]
 ```
 
-AnyTeX launches the child in a genuine controlling pseudo-terminal and forwards
+SimulTeX launches the child in a genuine controlling pseudo-terminal and forwards
 keystrokes, output, signals, exit status, and window size normally. The same PTY
 output is mirrored into an in-memory VT screen so the browser can reconstruct
 terminal UI without replacing or modifying the original TUI.
 
-For direct `codex` and `claude` commands, AnyTeX also starts a temporary
+For direct `codex` and `claude` commands, SimulTeX also starts a temporary
 loopback reverse proxy. Only the child receives the per-run API routing override.
 The proxy forwards model traffic as it arrives and normalizes provider responses
 into turn, call, user-message, and assistant-text events.
@@ -82,7 +82,7 @@ PTY-derived block remains visible instead of disappearing.
 
 ### Rich Markdown
 
-Submitted prompts and assistant responses render with `markdown-it`. AnyTeX
+Submitted prompts and assistant responses render with `markdown-it`. SimulTeX
 supports KaTeX equations, Mermaid architecture diagrams, tables, images, and a
 curated set of Highlight.js languages. Unknown and unlabeled code fences remain
 safely escaped plain code.
@@ -113,25 +113,25 @@ original URL remains in the snapshot.
 Use a fixed port when helpful for browser automation:
 
 ```sh
-anytex --browser --browser-port 8765 -- codex
+simultex --browser --browser-port 8765 -- codex
 ```
 
 Disable authoritative API capture to test PTY reconstruction by itself:
 
 ```sh
-anytex --browser --no-api-proxy -- codex
+simultex --browser --no-api-proxy -- codex
 ```
 
 Useful development and diagnostic options:
 
 ```sh
-anytex --browser --api-upstream URL -- codex
-anytex --browser --capture-raw codex.raw -- codex
-anytex --browser --no-dollar -- codex
+simultex --browser --api-upstream URL -- codex
+simultex --browser --capture-raw codex.raw -- codex
+simultex --browser --no-dollar -- codex
 ```
 
 Raw captures can contain the complete terminal conversation and metadata.
-AnyTeX refuses to overwrite an existing capture file.
+SimulTeX refuses to overwrite an existing capture file.
 
 ## Privacy and security
 
@@ -140,7 +140,7 @@ and event stream require a random token included in the printed URL. Keep that
 URL private: anyone who can open it can read the mirrored conversation.
 
 The browser is deliberately read-only and cannot send input to the child. API
-routing changes are scoped to the launched child process; AnyTeX does not modify
+routing changes are scoped to the launched child process; SimulTeX does not modify
 global Codex or Claude configuration. Browser mode sends no graphics escapes or
 other modified output to the terminal.
 
@@ -162,11 +162,11 @@ recovered exactly.
 
 ## Optional terminal LaTeX images
 
-AnyTeX can also replace terminal LaTeX with transparent inline images when used
+SimulTeX can also replace terminal LaTeX with transparent inline images when used
 without `--browser`:
 
 ```sh
-anytex -- codex
+simultex -- codex
 ```
 
 This optional mode requires `latex`, `dvipng`, and a Kitty-graphics-compatible
@@ -176,7 +176,7 @@ output because it has no supported inline-image protocol.
 Run the environment check from Kitty or Ghostty:
 
 ```sh
-anytex --check
+simultex --check
 ```
 
 Terminal rendering recognizes `\(...\)`, `\[...\]`, `$$...$$`, conservative
@@ -188,11 +188,11 @@ hostile multi-tenant input.
 Useful terminal-rendering options include:
 
 ```sh
-anytex --graphics kitty --check
-anytex --color 202020 -- codex
-anytex --no-dollar -- codex
-anytex --inline-rows 2 --max-rows 16 -- codex
-anytex --verbose -- codex
+simultex --graphics kitty --check
+simultex --color 202020 -- codex
+simultex --no-dollar -- codex
+simultex --inline-rows 2 --max-rows 16 -- codex
+simultex --verbose -- codex
 ```
 
 Inside tmux, Kitty graphics passthrough may require

@@ -75,7 +75,7 @@ test("keeps the original source visible when Mermaid rejects a diagram", async (
   assert.equal(fallback.textContent, "not a diagram");
   assert.equal(node.dataset.mermaidState, "failed");
   assert.deepEqual(warning, [
-    "Could not render AnyTeX Mermaid diagram",
+    "Could not render SimulTeX Mermaid diagram",
     "parse failed",
   ]);
 });

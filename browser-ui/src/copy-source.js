@@ -33,7 +33,7 @@ async function activate(region) {
     region.classList.remove("copy-failed");
   } catch (error) {
     region.classList.add("copy-failed");
-    console.warn("Could not copy AnyTeX source", error);
+    console.warn("Could not copy SimulTeX source", error);
     window.setTimeout(() => region.classList.remove("copy-failed"), 1_400);
   }
 }

@@ -1,9 +1,9 @@
 {
-  "name": "anytex-browser-ui",
+  "name": "simultex-browser-ui",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.js --bundle --format=esm --minify --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --outfile=../src/anytex/browser_assets/app.js",
+    "build": "esbuild src/main.js --bundle --format=esm --minify --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --outfile=../src/simultex/browser_assets/app.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

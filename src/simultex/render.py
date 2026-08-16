@@ -73,7 +73,7 @@ class LatexRenderer:
         self.timeout = timeout
         self._latex = shutil.which("latex")
         self._dvipng = shutil.which("dvipng")
-        self._tmp = tempfile.TemporaryDirectory(prefix="anytex-")
+        self._tmp = tempfile.TemporaryDirectory(prefix="simultex-")
         self._cache: dict[str, RenderedImage] = {}
 
     def close(self) -> None:

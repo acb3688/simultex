@@ -128,7 +128,7 @@ class BrowserCompanion:
         self._server.daemon_threads = True
         self._thread = threading.Thread(
             target=self._server.serve_forever,
-            name="anytex-browser",
+            name="simultex-browser",
             daemon=True,
         )
 
@@ -173,7 +173,7 @@ class BrowserCompanion:
         companion = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "anytex-browser"
+            server_version = "simultex-browser"
 
             def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
                 parsed = urlsplit(self.path)
@@ -219,7 +219,7 @@ class BrowserCompanion:
                     json.dumps({"parseDollars": companion.parse_dollars}),
                     quote=True,
                 )
-                body = template.replace("__ANYTEX_CONFIG__", config).encode("utf-8")
+                body = template.replace("__SIMULTEX_CONFIG__", config).encode("utf-8")
                 self.send_response(HTTPStatus.OK)
                 self._headers("text/html; charset=utf-8", len(body))
                 self.end_headers()

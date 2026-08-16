@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import argparse
 
-from anytex.protocol import KittyGraphics, TerminalGeometry
-from anytex.render import LatexRenderer
-from anytex.screen import ScreenLatexOverlay
+from simultex.protocol import KittyGraphics, TerminalGeometry
+from simultex.render import LatexRenderer
+from simultex.screen import ScreenLatexOverlay
 
 
 class RecordingRenderer:

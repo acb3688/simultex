@@ -12,7 +12,7 @@ function bytesToBase64(buffer) {
 
 export function snapshotFilename(now = new Date()) {
   const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-  return `anytex-transcript-${stamp}.html`;
+  return `simultex-transcript-${stamp}.html`;
 }
 
 export async function inlineCssAssets(css, baseUrl, fetchAsset = fetch) {
@@ -52,10 +52,10 @@ export async function inlineDocumentImages(document, clone, fetchAsset = fetch) 
     const source = image.currentSrc || image.src;
     if (!copy) return;
     if (!source || /^data:/i.test(source)) {
-      copy.removeAttribute("data-anytex-source");
+      copy.removeAttribute("data-simultex-source");
       return;
     }
-    const fallback = copy.getAttribute("data-anytex-source") || source;
+    const fallback = copy.getAttribute("data-simultex-source") || source;
     try {
       const response = await fetchAsset(source);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -70,7 +70,7 @@ export async function inlineDocumentImages(document, clone, fetchAsset = fetch) 
       // Remote images without CORS remain network-backed in the snapshot.
       copy.setAttribute("src", fallback);
     } finally {
-      copy.removeAttribute("data-anytex-source");
+      copy.removeAttribute("data-simultex-source");
     }
   }));
 }
@@ -122,7 +122,7 @@ export function serializeApiDiagnostics(diagnostics) {
 
 function addApiDiagnostics(document, clone, diagnostics) {
   const script = document.createElement("script");
-  script.id = "anytex-api-transcript";
+  script.id = "simultex-api-transcript";
   script.type = "application/json";
   script.textContent = serializeApiDiagnostics(diagnostics);
   clone.querySelector("body")?.append(script);
@@ -130,7 +130,7 @@ function addApiDiagnostics(document, clone, diagnostics) {
 
 function addCopyRuntime(document, clone) {
   const script = document.createElement("script");
-  script.dataset.anytexCopyRuntime = "";
+  script.dataset.simultexCopyRuntime = "";
   script.textContent = SNAPSHOT_COPY_SCRIPT;
   clone.querySelector("body")?.append(script);
 }
@@ -145,18 +145,18 @@ export async function createSnapshotHtml(
   const css = await snapshotCss(document, fetchAsset);
   const clone = document.documentElement.cloneNode(true);
   await inlineDocumentImages(document, clone, fetchAsset);
-  clone.dataset.anytexSnapshot = now.toISOString();
-  clone.querySelectorAll("script, link[rel='stylesheet'], meta[name='anytex-config']")
+  clone.dataset.simultexSnapshot = now.toISOString();
+  clone.querySelectorAll("script, link[rel='stylesheet'], meta[name='simultex-config']")
     .forEach((node) => node.remove());
   clone.querySelector("#download-html")?.remove();
 
   const style = document.createElement("style");
-  style.dataset.anytexSnapshotStyles = "";
+  style.dataset.simultexSnapshotStyles = "";
   style.textContent = css;
   clone.querySelector("head")?.append(style);
 
   const title = clone.querySelector("title");
-  if (title) title.textContent = "AnyTeX Transcript Snapshot";
+  if (title) title.textContent = "SimulTeX Transcript Snapshot";
   const status = clone.querySelector("#status");
   if (status) {
     status.textContent = "Snapshot";

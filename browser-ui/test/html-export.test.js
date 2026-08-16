@@ -10,7 +10,7 @@ import {
 
 test("creates a filesystem-safe timestamped snapshot filename", () => {
   const now = new Date("2026-08-15T04:30:12.345Z");
-  assert.equal(snapshotFilename(now), "anytex-transcript-20260815T043012Z.html");
+  assert.equal(snapshotFilename(now), "simultex-transcript-20260815T043012Z.html");
 });
 
 test("embeds stylesheet assets and leaves data URLs untouched", async () => {

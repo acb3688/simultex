@@ -3,13 +3,13 @@ requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
 [project]
-name = "anytex"
+name = "simultex"
 version = "0.1.0"
 description = "A PTY proxy that renders LaTeX as transparent terminal images"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "anytex contributors" }]
+authors = [{ name = "acb3688" }]
 dependencies = [
     "fastapi>=0.115,<1",
     "httpx>=0.27,<1",
@@ -18,10 +18,10 @@ dependencies = [
 ]
 
 [project.scripts]
-anytex = "anytex.cli:main"
+simultex = "simultex.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/anytex"]
+packages = ["src/simultex"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

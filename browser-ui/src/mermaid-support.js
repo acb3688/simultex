@@ -16,7 +16,7 @@ async function renderClaimed(nodes, render, onError) {
     const source = node.dataset.copySource || "";
     try {
       diagramNumber += 1;
-      const result = await render(`anytex-mermaid-${diagramNumber}`, source);
+      const result = await render(`simultex-mermaid-${diagramNumber}`, source);
       if (!node.isConnected) continue;
       node.innerHTML = result.svg;
       node.dataset.mermaidState = "rendered";
@@ -28,7 +28,7 @@ async function renderClaimed(nodes, render, onError) {
       fallback.textContent = source;
       node.replaceChildren(fallback);
       node.dataset.mermaidState = "failed";
-      onError("Could not render AnyTeX Mermaid diagram", error);
+      onError("Could not render SimulTeX Mermaid diagram", error);
     }
   }
 }

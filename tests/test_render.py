@@ -1,6 +1,6 @@
 import unittest
 
-from anytex.render import LatexRenderer, RenderError
+from simultex.render import LatexRenderer, RenderError
 
 
 class RendererTests(unittest.TestCase):

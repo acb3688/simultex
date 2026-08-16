@@ -32,7 +32,7 @@ const ANSI_COLORS = [
   "#8ab4e8", "#d8a0df", "#7ad7dc", "#f3f4f6",
 ];
 
-const configElement = document.querySelector('meta[name="anytex-config"]');
+const configElement = document.querySelector('meta[name="simultex-config"]');
 const config = configElement ? JSON.parse(configElement.content) : {};
 const params = new URLSearchParams(window.location.search);
 const token = params.get("token");
@@ -228,11 +228,11 @@ function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
     }
   }
 
-  md.block.ruler.before("fence", "anytex_math_block", mathBlock, {
+  md.block.ruler.before("fence", "simultex_math_block", mathBlock, {
     alt: ["paragraph", "reference", "blockquote", "list"],
   });
-  md.inline.ruler.before("escape", "anytex_math_inline", mathInline);
-  md.core.ruler.after("inline", "anytex_parenthesized_math", parenthesizedMath);
+  md.inline.ruler.before("escape", "simultex_math_inline", mathInline);
+  md.core.ruler.after("inline", "simultex_parenthesized_math", parenthesizedMath);
   md.renderer.rules.fence = (tokens, index, options, environment, renderer) => {
     const token = tokens[index];
     const language = token.info.trim().split(/\s+/, 1)[0].toLowerCase();
@@ -267,7 +267,7 @@ function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
   md.renderer.rules.image = (tokens, index, options, environment, renderer) => {
     const image = tokens[index];
     const source = image.attrGet("src");
-    image.attrSet("data-anytex-source", source);
+    image.attrSet("data-simultex-source", source);
     image.attrSet(
       "src",
       resolveMarkdownImageSource(source, token),
@@ -886,9 +886,9 @@ function reconcile(models) {
     else delete node.dataset.apiCallId;
     if (model.apiProvider) node.dataset.apiProvider = model.apiProvider;
     else delete node.dataset.apiProvider;
-    if (node._anytexSignature !== model.signature) {
+    if (node._simultexSignature !== model.signature) {
       renderModel(node, model);
-      node._anytexSignature = model.signature;
+      node._simultexSignature = model.signature;
     }
     if (node !== cursor) transcript.insertBefore(node, cursor);
     cursor = node.nextSibling;
@@ -944,7 +944,7 @@ if (downloadButton) {
         apiTranscript.diagnostics(),
       );
     } catch (error) {
-      console.error("Could not export AnyTeX transcript", error);
+      console.error("Could not export SimulTeX transcript", error);
       downloadButton.textContent = "Export failed";
       window.setTimeout(() => {
         downloadButton.textContent = previousLabel;
@@ -997,7 +997,7 @@ if (!token) {
         scheduleRender();
       }
     } catch (error) {
-      console.error("Could not process AnyTeX API transcript event", error);
+      console.error("Could not process SimulTeX API transcript event", error);
     }
   });
 }

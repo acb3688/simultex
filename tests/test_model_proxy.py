@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from anytex.model_proxy import (
+from simultex.model_proxy import (
     ModelApiProxy,
     TranscriptCoordinator,
     _AnthropicObserver,
@@ -59,13 +59,13 @@ class LaunchRoutingTests(unittest.TestCase):
         )
 
         self.assertEqual(command[0], "codex")
-        self.assertIn('model_provider="anytex"', command)
+        self.assertIn('model_provider="simultex"', command)
         self.assertIn(
-            'model_providers.anytex.base_url="http://127.0.0.1:9000/token"',
+            'model_providers.simultex.base_url="http://127.0.0.1:9000/token"',
             command,
         )
-        self.assertIn("model_providers.anytex.requires_openai_auth=true", command)
-        self.assertIn("model_providers.anytex.supports_websockets=false", command)
+        self.assertIn("model_providers.simultex.requires_openai_auth=true", command)
+        self.assertIn("model_providers.simultex.supports_websockets=false", command)
         self.assertEqual(command[-2:], ["resume", "--last"])
         self.assertEqual(environ, {"PATH": "/bin"})
 
