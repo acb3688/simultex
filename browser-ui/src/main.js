@@ -28,6 +28,7 @@ import "./style.css";
 
 const DEFAULT_FOREGROUND = "var(--terminal-foreground)";
 const DEFAULT_BACKGROUND = "var(--terminal-background)";
+const MAX_MATH_BLOCK_LINES = 256;
 
 const ANSI_COLORS = [
   "#1d2027", "#d16969", "#69c07b", "#d7ba7d",
@@ -110,7 +111,7 @@ function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
     const pairs = new Map([["\\[", "\\]"], ["[", "]"], ["$$", "$$"]]);
     const closer = pairs.get(first);
     if (!closer) return false;
-    const limit = Math.min(endLine, startLine + 64);
+    const limit = Math.min(endLine, startLine + MAX_MATH_BLOCK_LINES);
     let nextLine = startLine + 1;
     while (nextLine < limit) {
       const lineStart = state.bMarks[nextLine] + state.tShift[nextLine];
