@@ -4,23 +4,14 @@
 
 # SimulTeX
 
-**A browser companion for Codex CLI and Claude Code.**
+**A rich browser companion for Codex and Claude Code CLI.**
 
 SimulTeX preserves the native terminal UI while turning the conversation into a
 readable, scrollable browser transcript. Prompts and responses render as rich
-Markdown; terminal chrome, composers, status indicators, tool activity, and
-permission panels remain recognizable alongside them.
+Markdown.
 
 The browser is read-only. You continue working in the real Codex or Claude
 terminal session while SimulTeX mirrors it on a private localhost URL.
-
-Compared with artifact-style workflows that ask the agent to create and format
-an HTML file, SimulTeX keeps presentation out of the generation task. The agent
-can answer directly in Markdown and devote its attention and context to the
-content instead of simultaneously designing markup, CSS, and layout. SimulTeX
-then renders that same output immediately with a fast, deterministic processor,
-producing a consistently polished result without making the model act as the
-document renderer.
 
 ## Quick start
 
@@ -41,11 +32,11 @@ Copy or open the token-bearing URL printed by SimulTeX, then press Enter to
 launch the child session. Keyboard input stays in the terminal; the browser
 follows the session live.
 
-Resume an existing Codex conversation with its exact saved Markdown:
+Resume an existing Codex or Claude conversation with its exact saved Markdown:
 
 ```sh
 simultex -- codex resume SESSION_ID
-simultex -- codex resume --last
+simultex -- claude --resume SESSION_ID
 ```
 
 SimulTeX reads the matching local Codex rollout when an explicit UUID or
@@ -65,6 +56,24 @@ unknown format, startup continues with the PTY-derived transcript.
   Mermaid source
 - Static, self-contained HTML transcript downloads
 - PTY-only fallback for other interactive terminal programs
+
+## Why SimulTeX?
+
+- **Works with Codex and Claude.** Use the same browser experience with
+  Codex CLI or Claude Code while continuing to work in their native TUIs.
+- **Rich rendering for user/assistant messages.** Both user messages and assistant responses
+  support Markdown, LaTeX, images, Mermaid diagrams, highlighted code, tables,
+  and more.
+- **Search like a web page.** Search the entire conversation with
+  <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>F</kbd>, scroll freely, and select or copy
+  content without fighting terminal history.
+- **Let the agent focus on the answer.** The agent answers in Markdown;
+  SimulTeX handles consistent rendering without asking it to author and style an
+  HTML artifact.
+- **Export as HTML.** Download the current conversation as a
+  self-contained HTML file directly from the companion page.
+- **Keep control in the terminal.** The companion is read-only, so
+  input, permissions, and interactive controls stay in the real terminal.
 
 ## How it works
 
@@ -91,41 +100,10 @@ into turn, call, user-message, and assistant-text events.
 Those API events are authoritative for conversation content, preserving exact
 Markdown and TeX without the loss caused by terminal wrapping. PTY reconstruction
 supplies everything the API does not contain: startup chrome, composers, status
-UI, tool activity, permission panels, and fallback messages. Calls triggered by
-tools remain grouped in their original turn.
+UI, tool activity, permission panels, and fallback messages.
 
 If API content is unavailable or a call fails before producing text, the
 PTY-derived block remains visible instead of disappearing.
-
-## Browser features
-
-### Rich Markdown
-
-Submitted prompts and assistant responses render with `markdown-it`. SimulTeX
-supports KaTeX equations, Mermaid architecture diagrams, tables, images, and a
-curated set of Highlight.js languages. Unknown and unlabeled code fences remain
-safely escaped plain code.
-
-Local Markdown image paths are served through the token-protected companion;
-HTTP and HTTPS image URLs load normally. Local paths are constrained to the
-session's working directory.
-
-### Exact-source copying
-
-Inline code, fenced code, rendered `latex`/`tex` fences, and Mermaid diagrams
-are clickable copy regions. Copying uses the original Markdown source rather
-than reconstructed or rendered text. The interaction also works in downloaded
-HTML through a local-file clipboard fallback.
-
-### Self-contained exports
-
-Use **Download HTML** in the browser header to save the current transcript. The
-export embeds its CSS, fonts, rendered Mermaid SVGs, and loaded local images. It
-removes the live event connection and access token while retaining the original
-Markdown and diagnostic metadata needed to inspect transcript reconciliation.
-
-Remote images are embedded when the browser can fetch them; otherwise their
-original URL remains in the snapshot.
 
 ## Options
 
@@ -152,36 +130,38 @@ simultex --no-dollar -- codex
 Raw captures can contain the complete terminal conversation and metadata.
 SimulTeX refuses to overwrite an existing capture file.
 
+## Exporting and sharing
+
+Use **Download HTML** to save a self-contained transcript with its styles, fonts,
+rendered diagrams, and loaded local images. The export removes the live connection
+and access token.
+
+Copyable code, LaTeX, and Mermaid regions preserve their original source in both
+the live companion and downloaded HTML. Remote images are embedded when possible;
+otherwise their original URLs remain in the file.
+
 ## Privacy and security
 
-The companion server and model proxy bind only to `127.0.0.1`. The live page
-and event stream require a random token included in the printed URL. Keep that
-URL private: anyone who can open it can read the mirrored conversation.
-
-The browser is deliberately read-only and cannot send input to the child. API
-routing changes are scoped to the launched child process; SimulTeX does not modify
-global Codex or Claude configuration. Browser mode sends no graphics escapes or
-other modified output to the terminal.
-
-When resuming Codex by UUID or with `--last`, SimulTeX reads that conversation's
-local saved rollout to recover Markdown that the restored terminal UI no longer
-contains. The data stays in the same loopback-only browser event stream.
-
-Remote Markdown images can contact their referenced HTTP servers when the page
-loads. Downloaded transcripts may contain conversation text, API reconciliation
-metadata, and embedded local images; review them before sharing.
+- **Local and private by default.** SimulTeX listens only on `127.0.0.1`, and the
+  live transcript requires the random token in the printed URL. Keep that URL
+  private.
+- **Read-only companion.** The browser cannot control the child process, and API
+  routing changes apply only to the launched command—not your global Codex or
+  Claude configuration.
+- **Local history access.** When resuming Codex, SimulTeX may read its saved local
+  history to restore exact Markdown; that data remains on the local companion.
+- **Review before sharing.** Remote images contact their original servers, and
+  downloaded transcripts may include conversation text, metadata, and local
+  images.
 
 ## Limitations
 
-The browser companion is a rich transcript, not a pixel-perfect second terminal.
-Conversation content is rendered as Markdown, while non-message output remains
-fixed-width terminal HTML. The active composer is reconstructed from transient
-terminal state and may briefly change as the TUI repaints.
-
-Authoritative API transcripts are currently available for direct Codex CLI and
-Claude Code launches. Other commands still receive the PTY-backed browser view,
-but Markdown that the child removed before drawing the terminal cannot be
-recovered exactly.
+- SimulTeX is a readable transcript, not a pixel-perfect copy of the terminal.
+  Messages render as Markdown, while terminal UI stays fixed-width; the composer
+  may briefly flicker during redraws.
+- Direct Codex and Claude sessions provide the most accurate Markdown. Other
+  commands rely on terminal reconstruction, so content erased before it appears
+  cannot always be recovered.
 
 ## Development
 
