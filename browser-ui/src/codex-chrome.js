@@ -14,6 +14,18 @@ export function hasAssistantMarker(text) {
   return /^[•·●⏺]\s?/.test(text.trimStart());
 }
 
+export function isActiveComposer(cursorInside, isLatest, tailHasAssistant) {
+  return cursorInside || (isLatest && !tailHasAssistant);
+}
+
+export function recoverComposerStart(startRow, panelRanges, hasAssistantAfter) {
+  const latestMarked = panelRanges.findLast((range) => range.marker);
+  if (!latestMarked
+    || latestMarked.start >= startRow
+    || hasAssistantAfter(latestMarked)) return startRow;
+  return latestMarked.start;
+}
+
 export function panelText(rows) {
   return rows
     .map((row) => row.text.trim())

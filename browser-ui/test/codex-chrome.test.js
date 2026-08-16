@@ -4,9 +4,11 @@ import test from "node:test";
 import {
   hasAssistantMarker,
   hasPromptMarker,
+  isActiveComposer,
   isDefaultSuggestion,
   isTransientComposer,
   isUserPanel,
+  recoverComposerStart,
   rememberPromptBackground,
 } from "../src/codex-chrome.js";
 
@@ -59,4 +61,33 @@ test("learns the prompt background from a real marked prompt", () => {
   rememberPromptBackground(true, false, "#444955", "default", promptBackgrounds);
 
   assert.equal(isUserPanel(false, "#444955", promptBackgrounds), true);
+});
+
+test("keeps the latest composer active while a completion overlay owns the cursor", () => {
+  assert.equal(isActiveComposer(false, true, false), true);
+  assert.equal(isActiveComposer(false, true, true), false);
+});
+
+test("keeps a composer active while its own panel owns the cursor", () => {
+  assert.equal(isActiveComposer(true, true, true), true);
+});
+
+test("recovers a visible unanswered composer before the frozen row watermark", () => {
+  const ranges = [
+    { start: 20, end: 23, marker: true },
+    { start: 36, end: 39, marker: true },
+  ];
+
+  assert.equal(recoverComposerStart(43, ranges, () => false), 36);
+});
+
+test("does not rewind to a submitted panel or an unmarked panel", () => {
+  assert.equal(
+    recoverComposerStart(43, [{ start: 36, end: 39, marker: true }], () => true),
+    43,
+  );
+  assert.equal(
+    recoverComposerStart(43, [{ start: 36, end: 39, marker: false }], () => false),
+    43,
+  );
 });

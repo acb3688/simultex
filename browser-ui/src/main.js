@@ -6,8 +6,10 @@ import { ApiTranscript } from "./api-transcript.js";
 import {
   hasAssistantMarker,
   hasPromptMarker,
+  isActiveComposer,
   isTransientComposer,
   isUserPanel,
+  recoverComposerStart,
   rememberPromptBackground,
 } from "./codex-chrome.js";
 import { installCopyInteractions } from "./copy-source.js";
@@ -455,7 +457,10 @@ function captureBuffer() {
   previousColumns = terminal.cols;
   previousLength = buffer.length;
   previousBaseY = buffer.baseY;
-  return { cursorRow: buffer.baseY + buffer.cursorY };
+  return {
+    cursorRow: buffer.baseY + buffer.cursorY,
+    viewportStart: buffer.baseY,
+  };
 }
 
 function scheduleRender() {
@@ -720,10 +725,13 @@ function buildModels(cursorRow, startAt = 0) {
     }
     const cursorInside = cursorRow >= range.start && cursorRow < range.end;
     const isLatest = range === userRanges[userRanges.length - 1];
-    const tailHasResponse = isLatest && snapshots.slice(range.end).some(
-      (row) => row.text.trim() && !isCodexStatusLine(row.text),
-    );
-    const active = cursorInside || (isLatest && !tailHasResponse);
+    // Completion menus and other composer overlays move the terminal cursor
+    // below the input panel. Only an actual assistant marker means that the
+    // latest bright panel was submitted; arbitrary trailing TUI text must not
+    // freeze a draft as a completed user message.
+    const tailHasAssistant = isLatest
+      && firstAssistantMarker(range.end, snapshots.length) >= 0;
+    const active = isActiveComposer(cursorInside, isLatest, tailHasAssistant);
     if (active) {
       pushModel(models, terminalModel(range.start, range.end, excludedRows, true, "user"));
       activeUserTail = true;
@@ -852,8 +860,19 @@ function reconcile(models) {
 }
 
 function renderTranscript() {
-  const { cursorRow } = captureBuffer();
-  const models = buildModels(cursorRow, messageRecords.startRow);
+  const { cursorRow, viewportStart } = captureBuffer();
+  // Codex can repaint the active viewport in place instead of scrolling it
+  // into xterm's history. A frozen transcript watermark may therefore end up
+  // below a newly drawn composer. Recover only the latest unanswered marked
+  // panel from the visible viewport; committed transcript records stay
+  // detached from all other reused rows.
+  const visiblePanels = findPanelRanges(viewportStart);
+  const reconstructionStart = recoverComposerStart(
+    messageRecords.startRow,
+    visiblePanels,
+    (range) => firstAssistantMarker(range.end, snapshots.length) >= 0,
+  );
+  const models = buildModels(cursorRow, reconstructionStart);
   const records = messageRecords.update(models, freezeBefore(models));
   renderedRecords = apiTranscript.reconcile(records);
   reconcile(renderedRecords);
