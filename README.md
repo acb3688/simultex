@@ -33,6 +33,17 @@ Open the token-bearing URL printed by SimulTeX. Keyboard input stays in the
 terminal; the browser follows the session live. SimulTeX gives Claude Code a
 ten-second startup pause so you have time to open or copy the URL.
 
+Resume an existing Codex conversation with its exact saved Markdown:
+
+```sh
+simultex --browser -- codex resume SESSION_ID
+simultex --browser -- codex resume --last
+```
+
+SimulTeX reads the matching local Codex rollout when an explicit UUID or
+`--last` selects the session. If that saved history is unavailable or uses an
+unknown format, startup continues with the PTY-derived transcript.
+
 ## What you get
 
 - The original Codex or Claude TUI, unchanged in your terminal
@@ -143,6 +154,10 @@ The browser is deliberately read-only and cannot send input to the child. API
 routing changes are scoped to the launched child process; SimulTeX does not modify
 global Codex or Claude configuration. Browser mode sends no graphics escapes or
 other modified output to the terminal.
+
+When resuming Codex by UUID or with `--last`, SimulTeX reads that conversation's
+local saved rollout to recover Markdown that the restored terminal UI no longer
+contains. The data stays in the same loopback-only browser event stream.
 
 Remote Markdown images can contact their referenced HTTP servers when the page
 loads. Downloaded transcripts may contain conversation text, API reconciliation

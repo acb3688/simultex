@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import __version__
 from .browser import BrowserCompanion
+from .codex_history import codex_resume_history_events
 from .model_proxy import ModelApiProxy, detect_provider, route_child, validate_upstream
 from .protocol import KittyGraphics, TerminalGeometry, supports_kitty_graphics
 from .pty_proxy import StreamObserver, StreamTransform, run_proxy
@@ -204,7 +205,20 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"simultex: cannot start browser companion: {exc}") from None
         with companion:
             print(f"simultex: browser companion: {companion.url}", file=sys.stderr)
-            provider = None if args.no_api_proxy else detect_provider(command)
+            detected_provider = detect_provider(command)
+            if detected_provider == "openai":
+                history_events = codex_resume_history_events(command)
+                for event in history_events:
+                    companion.api_event(event)
+                history_turns = sum(
+                    event.get("type") == "turn.started" for event in history_events
+                )
+                if history_turns:
+                    print(
+                        f"simultex: restored {history_turns} previous Codex turns",
+                        file=sys.stderr,
+                    )
+            provider = None if args.no_api_proxy else detected_provider
             if provider is not None:
                 try:
                     model_proxy = ModelApiProxy(

@@ -87,6 +87,38 @@ test("authoritative Markdown replaces matching PTY messages without merging", ()
   assert.strictEqual(reconciled[3], composer);
 });
 
+test("restored Codex history repairs fences and math lost by the resumed TUI", () => {
+  const transcript = new ApiTranscript();
+  const exact = [
+    String.raw`\[`,
+    "x^2 + y^2 = z^2",
+    String.raw`\]`,
+    "",
+    "```python",
+    'print("hello")',
+    "```",
+    "",
+    "```mermaid",
+    "flowchart LR",
+    "    A --> B",
+    "```",
+  ].join("\n");
+  beginTurn(transcript, "history-turn-1", "Render it");
+  completeCall(transcript, "history-turn-1", "history-call-1", exact);
+  transcript.accept(event("turn.completed", { turn_id: "history-turn-1" }));
+
+  const reconciled = transcript.reconcile([
+    record("user", "Render it", 1),
+    record("assistant", "# [ x2 + y2 = z2 ]\nprint(hello)\nflowchart LR A --> B", 2),
+  ]);
+
+  assert.equal(reconciled[1].source, exact);
+  assert.equal(reconciled[1].authoritative, true);
+  assert.match(reconciled[1].source, /```python/);
+  assert.match(reconciled[1].source, /```mermaid/);
+  assert.match(reconciled[1].source, /\\\[/);
+});
+
 test("a proxy user message is inserted when the TUI erased its panel", () => {
   const transcript = new ApiTranscript();
   beginTurn(transcript, "turn-1", "First prompt", 1);
