@@ -107,6 +107,9 @@ export class MessageRecords {
 
   assign(record, candidate, frozen) {
     const key = record.key;
+    for (const property of Object.keys(record)) {
+      if (property !== "key") delete record[property];
+    }
     Object.assign(record, candidate);
     record.key = key;
     record.frozen = frozen;

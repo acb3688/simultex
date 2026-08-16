@@ -97,6 +97,23 @@ test("an active message and trailing terminal chrome stay mutable together", () 
   assert.equal(records[2].source, "model: gpt-5.6");
 });
 
+test("reused live records discard fields absent from their new candidate", () => {
+  const messages = new MessageRecords();
+
+  messages.update([
+    candidate("terminal", "1. Yes", 20, 20, "user"),
+  ], 0);
+  const replacement = candidate("terminal", undefined, 20);
+  delete replacement.source;
+  const records = messages.update([
+    replacement,
+  ], 0);
+
+  assert.equal("source" in records[0], false);
+  assert.equal("messageRole" in records[0], true);
+  assert.equal(records[0].messageRole, undefined);
+});
+
 test("a repaint resets the freeze window before a response is committed", () => {
   const messages = new MessageRecords();
 

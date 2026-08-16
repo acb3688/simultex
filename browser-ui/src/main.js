@@ -8,11 +8,14 @@ import {
   hasAssistantMarker,
   hasPromptMarker,
   isActiveComposer,
+  isClaudePermissionChoice,
+  isClaudePermissionPrompt,
+  isClaudeStatusLine,
   isTransientComposer,
   isUserPanel,
   recoverComposerStart,
   rememberPromptBackground,
-} from "./codex-chrome.js";
+} from "./tui-chrome.js";
 import { installCopyInteractions } from "./copy-source.js";
 import { highlightCode } from "./code-highlighting.js";
 import { downloadSnapshot } from "./html-export.js";
@@ -572,6 +575,8 @@ function rangeBackground(rows) {
 
 function findPanelRanges(startAt = 0) {
   const ranges = [];
+  const permissionVisible = snapshots.slice(startAt)
+    .some((row) => isClaudePermissionPrompt(row.text));
   for (let start = startAt; start < snapshots.length;) {
     if (snapshots[start].rowBackground === DEFAULT_BACKGROUND) {
       start += 1;
@@ -583,10 +588,12 @@ function findPanelRanges(startAt = 0) {
     const first = rows.find((row) => row.text.trim())?.text.trimStart() || "";
     const background = rangeBackground(rows);
     const marker = hasPromptMarker(first);
-    const transient = isTransientComposer(rows);
+    const permissionChoice = permissionVisible
+      && isClaudePermissionChoice(panelText(rows));
+    const transient = permissionChoice || isTransientComposer(rows);
     rememberPromptBackground(
-      marker,
-      transient,
+      marker && !permissionChoice,
+      transient && !permissionChoice,
       background,
       DEFAULT_BACKGROUND,
       promptBackgrounds,
@@ -597,6 +604,7 @@ function findPanelRanges(startAt = 0) {
       background,
       marker,
       transient,
+      hidden: permissionChoice,
     });
     start = end;
   }
@@ -612,12 +620,15 @@ function findPanelRanges(startAt = 0) {
     let end = start + 1;
     while (end < snapshots.length && snapshots[end].wrapped && !coveredRows.has(end)) end += 1;
     const rows = snapshots.slice(start, end);
+    const permissionChoice = permissionVisible
+      && isClaudePermissionChoice(panelText(rows));
     ranges.push({
       start,
       end,
       background: rangeBackground(rows),
       marker: true,
-      transient: isTransientComposer(rows),
+      transient: permissionChoice || isTransientComposer(rows),
+      hidden: permissionChoice,
     });
     start = end - 1;
   }
@@ -639,10 +650,6 @@ function isCodexProgressLine(text) {
 
 function isTuiDivider(text) {
   return /^\s*[─━]{8,}\s*$/.test(text);
-}
-
-function isClaudeStatusLine(text) {
-  return /^\s*(?:⏸|⏵)\s+.*(?:mode on|for shortcuts|for agents)/i.test(text);
 }
 
 function filteredRows(start, end, excludedRows, stripChrome = false) {
@@ -741,8 +748,15 @@ function buildModels(cursorRow, startAt = 0) {
   // conversation messages. Segment them from the surrounding transcript so
   // their prompt background and live terminal styling remain visible without
   // allowing placeholder text to leak into an assistant Markdown block.
-  const visiblePanelRanges = panelRanges.filter((range) => range.user || range.transient);
-  const excludedRows = new Set();
+  const visiblePanelRanges = panelRanges.filter(
+    (range) => !range.hidden && (range.user || range.transient),
+  );
+  const excludedRows = new Set(panelRanges
+    .filter((range) => range.hidden)
+    .flatMap((range) => Array.from(
+      { length: range.end - range.start },
+      (_, index) => range.start + index,
+    )));
   const userRanges = panelRanges.filter((range) => range.user && !range.transient);
   let position = startAt;
   let haveUser = messageRecords.committed.some((record) => record.messageRole === "user");

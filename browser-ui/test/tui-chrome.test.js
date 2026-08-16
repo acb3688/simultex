@@ -5,12 +5,15 @@ import {
   hasAssistantMarker,
   hasPromptMarker,
   isActiveComposer,
+  isClaudePermissionChoice,
+  isClaudePermissionPrompt,
+  isClaudeStatusLine,
   isDefaultSuggestion,
   isTransientComposer,
   isUserPanel,
   recoverComposerStart,
   rememberPromptBackground,
-} from "../src/codex-chrome.js";
+} from "../src/tui-chrome.js";
 
 function row(text, dim = false) {
   return {
@@ -29,6 +32,34 @@ test("recognizes Claude's composer suggestion and message markers", () => {
   assert.equal(isDefaultSuggestion('Try "how does cli.py work?"'), true);
   assert.equal(hasPromptMarker("❯ Explain this codebase"), true);
   assert.equal(hasAssistantMarker("⏺ Here is the answer"), true);
+});
+
+test("recognizes Claude's animated thinking row as transient chrome", () => {
+  assert.equal(
+    isClaudeStatusLine("✶ Blanching… (11s · thinking with xhigh effort)"),
+    true,
+  );
+  assert.equal(isClaudeStatusLine("✻ Cogitating… (esc to interrupt)"), true);
+  assert.equal(isClaudeStatusLine("⏵⏵ accept edits on (shift+tab to cycle)"), true);
+  assert.equal(
+    isClaudeStatusLine("Do you want to allow Claude to fetch this content?"),
+    true,
+  );
+  assert.equal(isClaudeStatusLine("✶ This symbol is part of the answer"), false);
+});
+
+test("recognizes Claude's permission prompt and choices without matching prose", () => {
+  assert.equal(
+    isClaudePermissionPrompt("Do you want to allow Claude to fetch this content?"),
+    true,
+  );
+  assert.equal(isClaudePermissionChoice("1. Yes"), true);
+  assert.equal(
+    isClaudePermissionChoice("2. No, and tell Claude what to do differently"),
+    true,
+  );
+  assert.equal(isClaudePermissionChoice("1. Yes is a valid answer."), false);
+  assert.equal(isClaudePermissionPrompt("Do you want Claude to explain this?"), false);
 });
 
 test("does not mistake a Markdown blockquote for a user prompt", () => {

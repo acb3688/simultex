@@ -14,6 +14,23 @@ export function hasAssistantMarker(text) {
   return /^[•·●⏺]\s?/.test(text.trimStart());
 }
 
+export function isClaudeStatusLine(text) {
+  const stripped = text.trim();
+  if (/^(?:⏸|⏵)+\s+.*(?:mode on|accept edits on|for shortcuts|for agents)/i
+    .test(stripped)) return true;
+  if (isClaudePermissionPrompt(stripped)) return true;
+  return /^[·✢✳✶✻✽✦✧]\s+\S.*…(?:\s+\([^)]*(?:thinking|tokens|esc to interrupt)[^)]*\))?$/iu
+    .test(stripped);
+}
+
+export function isClaudePermissionPrompt(text) {
+  return /^Do you want to allow Claude to\b.*\?$/i.test(text.trim());
+}
+
+export function isClaudePermissionChoice(text) {
+  return /^\d+\.\s+(?:Yes|No)(?:,\s+.*)?$/i.test(text.trim());
+}
+
 export function isActiveComposer(
   cursorInside,
   isLatest,
