@@ -94,6 +94,16 @@ Inline code, fenced code blocks, and rendered `latex`/`tex` fences highlight on
 hover and copy their original source when clicked. This remains available in
 downloaded snapshots, with a local-file clipboard fallback.
 
+Fenced `mermaid` blocks render as diagrams in the live transcript and remain
+fully rendered in downloaded HTML snapshots. Click a diagram to copy its
+original Mermaid source:
+
+```mermaid
+flowchart LR
+    TUI[Codex or Claude TUI] --> Proxy[Local API proxy]
+    Proxy --> Browser[AnyTeX browser]
+```
+
 The server binds only to `127.0.0.1`, and its live event stream requires the
 random per-run token in the printed URL. Keep that URL private: the browser view
 can contain the full terminal conversation. This mode does not send Kitty

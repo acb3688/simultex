@@ -1,0 +1,2 @@
+# Minified third-party bundles can contain whitespace inside string literals.
+src/anytex/browser_assets/app.js -whitespace

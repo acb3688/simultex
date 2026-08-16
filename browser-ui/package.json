@@ -9,7 +9,8 @@
   "dependencies": {
     "@xterm/xterm": "^6.0.0",
     "katex": "^0.16.22",
-    "markdown-it": "^15.0.0"
+    "markdown-it": "^15.0.0",
+    "mermaid": "^11.16.1"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

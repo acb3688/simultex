@@ -319,6 +319,39 @@ header {
   background: #282e36;
 }
 
+.mermaid-diagram {
+  min-height: 4rem;
+  margin: 0.65rem 0;
+  padding: 0.8rem;
+  overflow: auto;
+  border: 1px solid #3c4350;
+  background: #20242b;
+}
+
+.mermaid-diagram:hover,
+.mermaid-diagram:focus-visible {
+  border-color: #5c7d87;
+  background: #232a32;
+}
+
+.mermaid-diagram > svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: auto;
+}
+
+.mermaid-diagram .mermaid-source {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  white-space: pre-wrap;
+}
+
+.mermaid-diagram[data-mermaid-state="failed"] {
+  border-color: #ff7b72;
+}
+
 .message table {
   display: block;
   max-width: 100%;

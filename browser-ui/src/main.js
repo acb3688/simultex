@@ -1,6 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import MarkdownIt from "markdown-it";
 import katex from "katex";
+import mermaid from "mermaid";
 import "katex/dist/katex.css";
 import { ApiTranscript } from "./api-transcript.js";
 import {
@@ -17,6 +18,7 @@ import { downloadSnapshot } from "./html-export.js";
 import { resolveMarkdownImageSource } from "./image-source.js";
 import { normalizeLatexFence, normalizeTerminalMath } from "./latex-normalize.js";
 import { MessageRecords } from "./message-records.js";
+import { mermaidFenceHtml, scheduleMermaidDiagrams } from "./mermaid-support.js";
 import "./style.css";
 
 const DEFAULT_FOREGROUND = "var(--terminal-foreground)";
@@ -234,6 +236,9 @@ function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
     const token = tokens[index];
     const language = token.info.trim().split(/\s+/, 1)[0].toLowerCase();
     const copySource = token.content.replace(/\n$/, "");
+    if (language === "mermaid") {
+      return mermaidFenceHtml(copySource, copyAttributes, escapeHtml);
+    }
     if (!["latex", "tex"].includes(language)) {
       return `<div ${copyAttributes(copySource, "copy-block", "Copy code")}>${
         renderFence(tokens, index, options, environment, renderer)
@@ -330,6 +335,15 @@ const apiTranscript = new ApiTranscript();
 const nodes = new Map();
 const promptBackgrounds = new Set();
 let renderedRecords = [];
+let mermaidRenderQueue = Promise.resolve();
+
+mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: "strict",
+  suppressErrorRendering: true,
+  theme: "dark",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+});
 
 function paletteColor(index) {
   if (index < ANSI_COLORS.length) return ANSI_COLORS[index];
@@ -903,6 +917,10 @@ function renderTranscript() {
   const records = messageRecords.update(models, freezeBefore(models));
   renderedRecords = apiTranscript.reconcile(records);
   reconcile(renderedRecords);
+  mermaidRenderQueue = scheduleMermaidDiagrams(
+    transcript,
+    (id, source) => mermaid.render(id, source),
+  );
   transcript.style.setProperty("--terminal-columns", terminal.cols);
   // If the candidate changed during the settle pass, give it another bounded
   // pass. This self-flushes the final repaint without polling forever.
@@ -916,6 +934,7 @@ if (downloadButton) {
     downloadButton.disabled = true;
     downloadButton.textContent = "Preparing…";
     try {
+      await mermaidRenderQueue;
       await downloadSnapshot(
         document,
         renderedRecords,
