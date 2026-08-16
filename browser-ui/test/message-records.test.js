@@ -15,6 +15,13 @@ function candidate(kind, source, start, end = start, messageRole) {
   };
 }
 
+function composer(source = "› Use /skills to list available skills", start = 31) {
+  return {
+    ...candidate("terminal", source, start, start + 2),
+    panel: true,
+  };
+}
+
 test("committed messages advance the row watermark and detach from VT updates", () => {
   const messages = new MessageRecords();
 
@@ -135,6 +142,24 @@ test("a repaint resets the freeze window before a response is committed", () => 
   ], 1, 242);
   assert.equal(records[0].frozen, true);
   assert.match(records[0].source, /^Opening sentence/);
+});
+
+test("an ephemeral composer cannot be committed or accumulated", () => {
+  const messages = new MessageRecords();
+
+  for (const now of [0, 121, 242, 363]) {
+    const records = messages.update([
+      composer(),
+      candidate("assistant", "gpt-5.6-sol default · ~/thingy", 34),
+    ], 1, now);
+    const composers = records.filter(
+      (record) => record.kind === "terminal" && record.panel,
+    );
+
+    assert.equal(composers.length, 1);
+    assert.equal(composers[0].frozen, false);
+    assert.equal(messages.committed.some((record) => record.panel), false);
+  }
 });
 
 test("a submitted user message is committed before its rows are repainted", () => {

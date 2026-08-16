@@ -14,6 +14,14 @@ permission panels remain recognizable alongside them.
 The browser is read-only. You continue working in the real Codex or Claude
 terminal session while SimulTeX mirrors it on a private localhost URL.
 
+Compared with artifact-style workflows that ask the agent to create and format
+an HTML file, SimulTeX keeps presentation out of the generation task. The agent
+can answer directly in Markdown and devote its attention and context to the
+content instead of simultaneously designing markup, CSS, and layout. SimulTeX
+then renders that same output immediately with a fast, deterministic processor,
+producing a consistently polished result without making the model act as the
+document renderer.
+
 ## Quick start
 
 SimulTeX requires Python 3.10 or newer. From this repository:

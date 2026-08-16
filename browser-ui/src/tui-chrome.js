@@ -14,6 +14,10 @@ export function hasAssistantMarker(text) {
   return /^[•·●⏺]\s?/.test(text.trimStart());
 }
 
+export function isCodexStatusLine(text) {
+  return /^\s*(?:[•·]\s+)?\S+\s+\S+\s+·\s+(?:[~/]|[A-Za-z]:\\)/u.test(text);
+}
+
 export function isClaudeStatusLine(text) {
   const stripped = text.trim();
   if (/^(?:⏸|⏵)+\s+.*(?:mode on|accept edits on|for shortcuts|for agents)/i

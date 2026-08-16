@@ -46,10 +46,13 @@ export class MessageRecords {
     // for its empty composer and response, so the general settle window is too
     // slow here. Commit the ordered prefix immediately, but stop the row
     // watermark at the prompt's first row because later output may reuse it.
+    const firstPanel = candidates.findIndex(
+      (candidate) => candidate.kind === "terminal" && candidate.panel,
+    );
     const submittedUser = candidates.findLastIndex(
       (candidate) => candidate.kind === "user" && candidate.messageRole === "user",
     );
-    if (submittedUser >= 0) {
+    if (submittedUser >= 0 && (firstPanel < 0 || firstPanel > submittedUser)) {
       const safeStartRow = candidates[submittedUser].start;
       const newlyCommitted = this.live.splice(0, submittedUser + 1);
       for (let index = 0; index < newlyCommitted.length; index += 1) {
@@ -70,6 +73,7 @@ export class MessageRecords {
     }
 
     let freezeCount = Math.min(Math.max(freezeBefore, 0), this.live.length);
+    if (firstPanel >= 0) freezeCount = Math.min(freezeCount, firstPanel);
     if (freezeCount > 0) {
       const signature = candidates.slice(0, freezeCount)
         .map((candidate) => candidate.signature)

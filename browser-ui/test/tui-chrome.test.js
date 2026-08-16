@@ -8,6 +8,7 @@ import {
   isClaudePermissionChoice,
   isClaudePermissionPrompt,
   isClaudeStatusLine,
+  isCodexStatusLine,
   isDefaultSuggestion,
   isTransientComposer,
   isUserPanel,
@@ -46,6 +47,14 @@ test("recognizes Claude's animated thinking row as transient chrome", () => {
     true,
   );
   assert.equal(isClaudeStatusLine("✶ This symbol is part of the answer"), false);
+});
+
+test("recognizes Codex status lines without enumerating mode keywords", () => {
+  assert.equal(isCodexStatusLine("gpt-5.6-sol high · ~/simultex"), true);
+  assert.equal(isCodexStatusLine("gpt-5.6-sol default · ~/thingy"), true);
+  assert.equal(isCodexStatusLine("• gpt-next future-mode · C:\\workspace"), true);
+  assert.equal(isCodexStatusLine("The default path is ~/thingy"), false);
+  assert.equal(isCodexStatusLine("gpt-5.6-sol default · ready"), false);
 });
 
 test("recognizes Claude's permission prompt and choices without matching prose", () => {

@@ -11,6 +11,7 @@ import {
   isClaudePermissionChoice,
   isClaudePermissionPrompt,
   isClaudeStatusLine,
+  isCodexStatusLine,
   isTransientComposer,
   isUserPanel,
   recoverComposerStart,
@@ -637,11 +638,6 @@ function findPanelRanges(startAt = 0) {
     range.user = isUserPanel(range.marker, range.background, promptBackgrounds);
   }
   return ranges;
-}
-
-function isCodexStatusLine(text) {
-  return /^\s*(?:[•·]\s+)?\S+\s+(?:low|medium|high|xhigh|max|ultra)\s+·\s+(?:[~/]|[A-Za-z]:\\)/i
-    .test(text);
 }
 
 function isCodexProgressLine(text) {
