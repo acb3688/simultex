@@ -221,6 +221,72 @@ header {
   font-size: 0.92rem;
 }
 
+.message .hljs-comment,
+.message .hljs-quote {
+  color: #82909f;
+  font-style: italic;
+}
+
+.message .hljs-keyword,
+.message .hljs-selector-tag,
+.message .hljs-literal,
+.message .hljs-section,
+.message .hljs-link {
+  color: #d2a8ff;
+}
+
+.message .hljs-string,
+.message .hljs-attr,
+.message .hljs-template-tag,
+.message .hljs-template-variable,
+.message .hljs-regexp,
+.message .hljs-addition {
+  color: #a5d6a7;
+}
+
+.message .hljs-number,
+.message .hljs-symbol,
+.message .hljs-bullet,
+.message .hljs-variable,
+.message .hljs-variable.constant_,
+.message .hljs-meta {
+  color: #79c0ff;
+}
+
+.message .hljs-title,
+.message .hljs-title.class_,
+.message .hljs-title.function_,
+.message .hljs-selector-id,
+.message .hljs-selector-class {
+  color: #dcdcaa;
+}
+
+.message .hljs-built_in,
+.message .hljs-type,
+.message .hljs-params,
+.message .hljs-attribute {
+  color: #ffa657;
+}
+
+.message .hljs-name,
+.message .hljs-tag,
+.message .hljs-deletion {
+  color: #ff7b72;
+}
+
+.message .hljs-property,
+.message .hljs-punctuation {
+  color: #c9d1d9;
+}
+
+.message .hljs-emphasis {
+  font-style: italic;
+}
+
+.message .hljs-strong {
+  font-weight: 700;
+}
+
 .message img {
   display: block;
   max-width: 100%;

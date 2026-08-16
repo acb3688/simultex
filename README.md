@@ -93,6 +93,8 @@ event log and reconciliation metadata in a non-executable JSON script block.
 Inline code, fenced code blocks, and rendered `latex`/`tex` fences highlight on
 hover and copy their original source when clicked. This remains available in
 downloaded snapshots, with a local-file clipboard fallback.
+Fenced code with a recognized language label also receives syntax highlighting;
+unknown and unlabeled fences remain plain code.
 
 Fenced `mermaid` blocks render as diagrams in the live transcript and remain
 fully rendered in downloaded HTML snapshots. Click a diagram to copy its

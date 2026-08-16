@@ -14,6 +14,7 @@ import {
   rememberPromptBackground,
 } from "./codex-chrome.js";
 import { installCopyInteractions } from "./copy-source.js";
+import { highlightCode } from "./code-highlighting.js";
 import { downloadSnapshot } from "./html-export.js";
 import { resolveMarkdownImageSource } from "./image-source.js";
 import { normalizeLatexFence, normalizeTerminalMath } from "./latex-normalize.js";
@@ -315,6 +316,7 @@ function createMarkdown(repairTerminalMath) {
     linkify: true,
     typographer: true,
     breaks: false,
+    highlight: highlightCode,
   }).use(mathMarkdownPlugin, { repairTerminalMath });
 }
 
