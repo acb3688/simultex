@@ -221,6 +221,15 @@ header {
   font-size: 0.92rem;
 }
 
+.message img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.65rem 0;
+  border: 1px solid #3c4350;
+  border-radius: 7px;
+}
+
 .copy-inline {
   cursor: copy;
 }

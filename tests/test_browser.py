@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stderr
+from pathlib import Path
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from anytex.browser import BrowserCompanion, _Event, _EventBus
@@ -70,6 +73,42 @@ class BrowserCompanionTests(unittest.TestCase):
                 urlopen(url, timeout=2)
 
         self.assertEqual(403, raised.exception.code)
+
+    def test_serves_token_protected_images_from_the_session_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            image = root / "plot.png"
+            image.write_bytes(b"png-bytes")
+            with BrowserCompanion(content_root=root) as companion:
+                query = urlencode({"token": companion.token, "path": "plot.png"})
+                url = f"http://127.0.0.1:{companion.port}/session-image?{query}"
+                with urlopen(url, timeout=2) as response:
+                    body = response.read()
+                    content_type = response.headers["Content-Type"]
+
+        self.assertEqual(body, b"png-bytes")
+        self.assertEqual(content_type, "image/png")
+
+    def test_session_images_cannot_escape_the_session_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            root = parent / "session"
+            root.mkdir()
+            (parent / "secret.png").write_bytes(b"secret")
+            with BrowserCompanion(content_root=root) as companion:
+                query = urlencode({"token": companion.token, "path": "../secret.png"})
+                url = f"http://127.0.0.1:{companion.port}/session-image?{query}"
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(url, timeout=2)
+
+        self.assertEqual(404, raised.exception.code)
+
+    def test_page_allows_http_and_https_markdown_images(self) -> None:
+        with BrowserCompanion() as companion:
+            with urlopen(companion.url, timeout=2) as response:
+                policy = response.headers["Content-Security-Policy"]
+
+        self.assertIn("img-src 'self' data: blob: http: https:", policy)
 
     def test_cli_accepts_browser_options(self) -> None:
         args = build_parser().parse_args(

@@ -44,6 +44,37 @@ export async function inlineCssAssets(css, baseUrl, fetchAsset = fetch) {
   ));
 }
 
+export async function inlineDocumentImages(document, clone, fetchAsset = fetch) {
+  const originals = [...document.querySelectorAll("#transcript img")];
+  const copies = [...clone.querySelectorAll("#transcript img")];
+  await Promise.all(originals.map(async (image, index) => {
+    const copy = copies[index];
+    const source = image.currentSrc || image.src;
+    if (!copy) return;
+    if (!source || /^data:/i.test(source)) {
+      copy.removeAttribute("data-anytex-source");
+      return;
+    }
+    const fallback = copy.getAttribute("data-anytex-source") || source;
+    try {
+      const response = await fetchAsset(source);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const mimeType = response.headers.get("content-type")?.split(";", 1)[0]
+        || "application/octet-stream";
+      copy.setAttribute(
+        "src",
+        `data:${mimeType};base64,${bytesToBase64(await response.arrayBuffer())}`,
+      );
+      copy.removeAttribute("srcset");
+    } catch {
+      // Remote images without CORS remain network-backed in the snapshot.
+      copy.setAttribute("src", fallback);
+    } finally {
+      copy.removeAttribute("data-anytex-source");
+    }
+  }));
+}
+
 async function snapshotCss(document, fetchAsset) {
   const styles = [];
   for (const sheet of document.styleSheets) {
@@ -113,6 +144,7 @@ export async function createSnapshotHtml(
 ) {
   const css = await snapshotCss(document, fetchAsset);
   const clone = document.documentElement.cloneNode(true);
+  await inlineDocumentImages(document, clone, fetchAsset);
   clone.dataset.anytexSnapshot = now.toISOString();
   clone.querySelectorAll("script, link[rel='stylesheet'], meta[name='anytex-config']")
     .forEach((node) => node.remove());

@@ -20,6 +20,16 @@ from urllib.parse import parse_qs, urlsplit
 _ASSET_ROOT = Path(__file__).with_name("browser_assets")
 _MAX_HISTORY_BYTES = 8 * 1024 * 1024
 _CLIENT_QUEUE_SIZE = 512
+_MAX_SESSION_IMAGE_BYTES = 64 * 1024 * 1024
+_SESSION_IMAGE_TYPES = {
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
 
 
 class _QuietThreadingHTTPServer(ThreadingHTTPServer):
@@ -102,9 +112,16 @@ class _EventBus:
 class BrowserCompanion:
     """Serve a read-only rich transcript derived from raw PTY output."""
 
-    def __init__(self, port: int = 0, *, parse_dollars: bool = True):
+    def __init__(
+        self,
+        port: int = 0,
+        *,
+        parse_dollars: bool = True,
+        content_root: Path | None = None,
+    ):
         self.token = secrets.token_urlsafe(24)
         self.parse_dollars = parse_dollars
+        self.content_root = (content_root or Path.cwd()).resolve()
         self._events = _EventBus()
         handler = self._handler_type()
         self._server = _QuietThreadingHTTPServer(("127.0.0.1", port), handler)
@@ -166,6 +183,9 @@ class BrowserCompanion:
                 if parsed.path == "/events":
                     self._serve_events(parsed.query)
                     return
+                if parsed.path == "/session-image":
+                    self._serve_session_image(parsed.query)
+                    return
                 self._serve_asset(parsed.path)
 
             def log_message(self, _format: str, *_args: object) -> None:
@@ -181,7 +201,7 @@ class BrowserCompanion:
                     "Content-Security-Policy",
                     "default-src 'self'; connect-src 'self'; script-src 'self'; "
                     "style-src 'self' 'unsafe-inline'; font-src 'self' data:; "
-                    "img-src 'self' data:",
+                    "img-src 'self' data: blob: http: https:",
                 )
                 if length is not None:
                     self.send_header("Content-Length", str(length))
@@ -202,6 +222,40 @@ class BrowserCompanion:
                 body = template.replace("__ANYTEX_CONFIG__", config).encode("utf-8")
                 self.send_response(HTTPStatus.OK)
                 self._headers("text/html; charset=utf-8", len(body))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def _serve_session_image(self, query: str) -> None:
+                values = parse_qs(query)
+                supplied = values.get("token", [""])[0]
+                if not secrets.compare_digest(supplied, companion.token):
+                    self.send_error(HTTPStatus.FORBIDDEN)
+                    return
+                requested = values.get("path", [""])[0]
+                if not requested:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                candidate = Path(requested)
+                if not candidate.is_absolute():
+                    candidate = companion.content_root / candidate
+                try:
+                    path = candidate.resolve(strict=True)
+                    path.relative_to(companion.content_root)
+                    size = path.stat().st_size
+                except (OSError, ValueError):
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                content_type = _SESSION_IMAGE_TYPES.get(path.suffix.lower())
+                if not path.is_file() or content_type is None or size > _MAX_SESSION_IMAGE_BYTES:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                try:
+                    body = path.read_bytes()
+                except OSError:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                self.send_response(HTTPStatus.OK)
+                self._headers(content_type, len(body))
                 self.end_headers()
                 self.wfile.write(body)
 

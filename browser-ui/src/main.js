@@ -14,6 +14,7 @@ import {
 } from "./codex-chrome.js";
 import { installCopyInteractions } from "./copy-source.js";
 import { downloadSnapshot } from "./html-export.js";
+import { resolveMarkdownImageSource } from "./image-source.js";
 import { normalizeLatexFence, normalizeTerminalMath } from "./latex-normalize.js";
 import { MessageRecords } from "./message-records.js";
 import "./style.css";
@@ -68,6 +69,7 @@ function renderKatex(math, displayMode, source, escapeHtml, repairTerminalMath) 
 function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
   const escapeHtml = md.utils.escapeHtml;
   const renderFence = md.renderer.rules.fence;
+  const renderImage = md.renderer.rules.image;
 
   function copyAttributes(source, kind, label) {
     return `class="copy-region ${kind}" data-copy-source="${escapeHtml(source)}" `
@@ -255,6 +257,20 @@ function mathMarkdownPlugin(md, { repairTerminalMath = false } = {}) {
     return `<code ${copyAttributes(source, "copy-inline", "Copy inline code")}>${
       escapeHtml(source)
     }</code>`;
+  };
+  md.renderer.rules.image = (tokens, index, options, environment, renderer) => {
+    const image = tokens[index];
+    const source = image.attrGet("src");
+    image.attrSet("data-anytex-source", source);
+    image.attrSet(
+      "src",
+      resolveMarkdownImageSource(source, token),
+    );
+    image.attrSet("loading", "lazy");
+    image.attrSet("referrerpolicy", "no-referrer");
+    return renderImage
+      ? renderImage(tokens, index, options, environment, renderer)
+      : renderer.renderToken(tokens, index, options);
   };
   md.renderer.rules.math_block = (tokens, index) => {
     const token = tokens[index];

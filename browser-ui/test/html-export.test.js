@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   inlineCssAssets,
+  inlineDocumentImages,
   serializeApiDiagnostics,
   snapshotFilename,
 } from "../src/html-export.js";
@@ -38,6 +39,27 @@ test("uses an absolute asset URL when embedding fails", async () => {
     result,
     '.missing { src: url("http://127.0.0.1:8000/assets/missing.woff") }',
   );
+});
+
+test("embeds loaded transcript images in downloaded HTML", async () => {
+  const attributes = new Map([["src", "/session-image?token=x&path=plot.png"]]);
+  const original = {
+    currentSrc: "http://127.0.0.1:8000/session-image?token=x&path=plot.png",
+  };
+  const copy = {
+    getAttribute: (name) => attributes.get(name),
+    setAttribute: (name, value) => attributes.set(name, value),
+    removeAttribute: (name) => attributes.delete(name),
+  };
+  const document = { querySelectorAll: () => [original] };
+  const clone = { querySelectorAll: () => [copy] };
+
+  await inlineDocumentImages(document, clone, async () => new Response(
+    new Uint8Array([0, 1, 2]),
+    { headers: { "content-type": "image/png" } },
+  ));
+
+  assert.equal(attributes.get("src"), "data:image/png;base64,AAEC");
 });
 
 test("serializes API diagnostics without creating an executable script terminator", () => {
