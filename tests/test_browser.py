@@ -4,14 +4,13 @@ import io
 import json
 import tempfile
 import unittest
-from contextlib import redirect_stderr
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from simultex.browser import BrowserCompanion, _Event, _EventBus
-from simultex.cli import _wait_for_browser_url, build_parser
+from simultex.cli import _show_browser_startup, build_parser
 
 
 class EventBusTests(unittest.TestCase):
@@ -118,23 +117,40 @@ class BrowserCompanionTests(unittest.TestCase):
         self.assertTrue(args.browser)
         self.assertEqual(8123, args.browser_port)
 
-    def test_claude_launch_waits_after_showing_a_copy_url_note(self) -> None:
-        delays = []
+    def test_browser_startup_shows_colored_logo_url_and_waits_for_enter(self) -> None:
+        class TerminalBuffer(io.StringIO):
+            def isatty(self) -> bool:
+                return True
+
+        stdin = TerminalBuffer("\n")
+        stderr = TerminalBuffer()
+
+        _show_browser_startup(
+            "http://127.0.0.1:8123/?token=secret",
+            input_stream=stdin,
+            output_stream=stderr,
+        )
+
+        output = stderr.getvalue()
+        self.assertIn("\x1b[38;2;", output)
+        self.assertIn("http://127.0.0.1:8123/?token=secret", output)
+        self.assertIn("Copy or open the browser companion link", output)
+        self.assertIn("press Enter to continue", output)
+        self.assertEqual(stdin.tell(), 1)
+
+    def test_browser_startup_does_not_block_or_color_noninteractive_output(self) -> None:
+        stdin = io.StringIO("unread")
         stderr = io.StringIO()
 
-        with redirect_stderr(stderr):
-            _wait_for_browser_url("anthropic", seconds=10, sleeper=delays.append)
+        _show_browser_startup(
+            "http://127.0.0.1:8123/",
+            input_stream=stdin,
+            output_stream=stderr,
+        )
 
-        self.assertEqual(delays, [10])
-        self.assertIn("Claude starts in 10 seconds", stderr.getvalue())
-        self.assertIn("copy or open the browser companion URL", stderr.getvalue())
-
-    def test_codex_launch_has_no_browser_url_delay(self) -> None:
-        delays = []
-
-        _wait_for_browser_url("openai", seconds=10, sleeper=delays.append)
-
-        self.assertEqual(delays, [])
+        self.assertEqual(stdin.tell(), 0)
+        self.assertNotIn("\x1b[", stderr.getvalue())
+        self.assertIn("stdin is not interactive", stderr.getvalue())
 
     def test_api_events_share_the_ordered_event_bus(self) -> None:
         with BrowserCompanion() as companion:

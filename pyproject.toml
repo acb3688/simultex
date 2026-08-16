@@ -24,5 +24,8 @@ simultex = "simultex.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/simultex"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"assets/simultex.ansi" = "simultex/assets/simultex.ansi"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

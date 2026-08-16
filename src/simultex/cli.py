@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import sys
-import time
 from pathlib import Path
+from typing import TextIO
 
 from . import __version__
 from .browser import BrowserCompanion
@@ -20,7 +21,9 @@ from .screen import ScreenLatexOverlay
 from .stream import LatexStreamParser
 
 
-_CLAUDE_BROWSER_GRACE_SECONDS = 10
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_PACKAGED_LOGO = Path(__file__).with_name("assets") / "simultex.ansi"
+_SOURCE_LOGO = Path(__file__).parents[2] / "assets" / "simultex.ansi"
 
 
 def _hex_color(value: str) -> str:
@@ -152,21 +155,47 @@ def _check(args: argparse.Namespace) -> int:
     return 0 if image.has_alpha else 1
 
 
-def _wait_for_browser_url(
-    provider: str,
+def _startup_logo(*, color: bool) -> str:
+    for path in (_PACKAGED_LOGO, _SOURCE_LOGO):
+        try:
+            logo = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not color:
+            logo = _ANSI_ESCAPE.sub("", logo)
+        return re.sub(r"\n+(?=\x1b\[0m\s*\Z)", "", logo).strip()
+    return "SIMULTEX"
+
+
+def _show_browser_startup(
+    url: str,
     *,
-    seconds: int = _CLAUDE_BROWSER_GRACE_SECONDS,
-    sleeper=time.sleep,
+    input_stream: TextIO | None = None,
+    output_stream: TextIO | None = None,
 ) -> None:
-    if provider != "anthropic" or seconds <= 0:
+    input_stream = sys.stdin if input_stream is None else input_stream
+    output_stream = sys.stderr if output_stream is None else output_stream
+
+    print(_startup_logo(color=output_stream.isatty()), file=output_stream)
+    print(f"\nBrowser companion:\n  {url}", file=output_stream)
+    if not input_stream.isatty():
+        print(
+            "\nCopy or open the browser companion link above. "
+            "Continuing because stdin is not interactive.",
+            file=output_stream,
+            flush=True,
+        )
         return
+
     print(
-        f"simultex: Claude starts in {seconds} seconds; "
-        "copy or open the browser companion URL now",
-        file=sys.stderr,
+        "\nCopy or open the browser companion link above, "
+        "then press Enter to continue... ",
+        file=output_stream,
+        end="",
         flush=True,
     )
-    sleeper(seconds)
+    input_stream.readline()
+    print(file=output_stream, flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -204,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             raise SystemExit(f"simultex: cannot start browser companion: {exc}") from None
         with companion:
-            print(f"simultex: browser companion: {companion.url}", file=sys.stderr)
+            _show_browser_startup(companion.url)
             detected_provider = detect_provider(command)
             if detected_provider == "openai":
                 history_events = codex_resume_history_events(command)
@@ -236,7 +265,6 @@ def main(argv: list[str] | None = None) -> int:
                             f"simultex: using authoritative {provider} API transcript events",
                             file=sys.stderr,
                         )
-                        _wait_for_browser_url(provider)
                         return _run(
                             routed_command,
                             transform=None,
