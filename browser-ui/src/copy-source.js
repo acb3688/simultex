@@ -31,13 +31,11 @@ async function activate(region) {
   try {
     await copyText(region.dataset.copySource || "");
     region.classList.remove("copy-failed");
-    region.classList.add("copied");
   } catch (error) {
-    region.classList.remove("copied");
     region.classList.add("copy-failed");
     console.warn("Could not copy AnyTeX source", error);
+    window.setTimeout(() => region.classList.remove("copy-failed"), 1_400);
   }
-  window.setTimeout(() => region.classList.remove("copied", "copy-failed"), 1_400);
 }
 
 export function installCopyInteractions(root) {
@@ -50,7 +48,15 @@ export function installCopyInteractions(root) {
     const region = event.target.closest?.(".copy-region");
     if (!region || !root.contains(region)) return;
     event.preventDefault();
+    region.classList.add("copy-pressed");
     void activate(region);
+  });
+  root.addEventListener("keyup", (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    event.target.closest?.(".copy-region")?.classList.remove("copy-pressed");
+  });
+  root.addEventListener("focusout", (event) => {
+    event.target.closest?.(".copy-region")?.classList.remove("copy-pressed");
   });
 }
 
@@ -80,15 +86,10 @@ function snapshotCopyRuntime() {
     try {
       await write(region.dataset.copySource || "");
       region.classList.remove("copy-failed");
-      region.classList.add("copied");
     } catch {
-      region.classList.remove("copied");
       region.classList.add("copy-failed");
+      window.setTimeout(() => region.classList.remove("copy-failed"), 1400);
     }
-    window.setTimeout(
-      () => region.classList.remove("copied", "copy-failed"),
-      1400,
-    );
   }
 
   document.addEventListener("click", (event) => {
@@ -100,7 +101,15 @@ function snapshotCopyRuntime() {
     const region = event.target.closest?.(".copy-region");
     if (!region) return;
     event.preventDefault();
+    region.classList.add("copy-pressed");
     void activateSnapshot(region);
+  });
+  document.addEventListener("keyup", (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    event.target.closest?.(".copy-region")?.classList.remove("copy-pressed");
+  });
+  document.addEventListener("focusout", (event) => {
+    event.target.closest?.(".copy-region")?.classList.remove("copy-pressed");
   });
 }
 

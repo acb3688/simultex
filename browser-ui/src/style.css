@@ -221,10 +221,6 @@ header {
   font-size: 0.92rem;
 }
 
-.copy-region {
-  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
-}
-
 .copy-inline {
   cursor: copy;
 }
@@ -237,7 +233,8 @@ header {
   outline: none;
 }
 
-.copy-inline.copied {
+.copy-inline:active,
+.copy-inline.copy-pressed {
   border-color: #70d68b;
   background: #20352c;
   color: #baf2c8;
@@ -268,12 +265,13 @@ header {
   line-height: 1.2;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: opacity 120ms ease;
 }
 
 .copy-block:hover::after,
 .copy-block:focus-visible::after,
-.copy-block.copied::after,
+.copy-block:active::after,
+.copy-block.copy-pressed::after,
 .copy-block.copy-failed::after {
   opacity: 1;
 }
@@ -289,10 +287,10 @@ header {
   outline-offset: 2px;
 }
 
-.copy-block.copied::after {
+.copy-block:active::after,
+.copy-block.copy-pressed::after {
   border-color: #70d68b;
   color: #9be9ad;
-  content: "Copied";
 }
 
 .copy-block.copy-failed::after {

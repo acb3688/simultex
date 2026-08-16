@@ -48,6 +48,8 @@ test("falls back to a temporary textarea for local snapshots", async () => {
 
 test("snapshot copy runtime is self-contained and script-safe", () => {
   assert.match(SNAPSHOT_COPY_SCRIPT, /copy-region/);
+  assert.match(SNAPSHOT_COPY_SCRIPT, /copy-pressed/);
   assert.match(SNAPSHOT_COPY_SCRIPT, /execCommand/);
+  assert.doesNotMatch(SNAPSHOT_COPY_SCRIPT, /classList\.add\(["']copied/);
   assert.doesNotMatch(SNAPSHOT_COPY_SCRIPT, /<\/script>/i);
 });
