@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import gzip
 import json
+import socket
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+
+import uvicorn
+from fastapi import FastAPI, WebSocket
+from websockets.sync.client import connect as websocket_connect
 
 from simultex.model_proxy import (
     ModelApiProxy,
@@ -59,13 +65,9 @@ class LaunchRoutingTests(unittest.TestCase):
         )
 
         self.assertEqual(command[0], "codex")
-        self.assertIn('model_provider="simultex"', command)
-        self.assertIn(
-            'model_providers.simultex.base_url="http://127.0.0.1:9000/token"',
-            command,
-        )
-        self.assertIn("model_providers.simultex.requires_openai_auth=true", command)
-        self.assertIn("model_providers.simultex.supports_websockets=false", command)
+        self.assertIn('openai_base_url="http://127.0.0.1:9000/token"', command)
+        self.assertFalse(any(arg.startswith("model_provider=") for arg in command))
+        self.assertFalse(any(arg.startswith("model_providers.") for arg in command))
         self.assertEqual(command[-2:], ["resume", "--last"])
         self.assertEqual(environ, {"PATH": "/bin"})
 
@@ -686,6 +688,105 @@ class ProxyIntegrationTests(unittest.TestCase):
             raised.exception.close()
         self.assertEqual(raised.exception.code, 404)
         self.assertEqual(_UpstreamHandler.requests, [])
+
+    def test_websocket_is_forwarded_and_emits_api_events(self) -> None:
+        upstream_app = FastAPI()
+        received: dict[str, object] = {}
+
+        @upstream_app.websocket("/{path:path}")
+        async def upstream_socket(path: str, websocket: WebSocket):
+            received["path"] = path
+            received["query"] = websocket.url.query
+            received["authorization"] = websocket.headers.get("authorization")
+            await websocket.accept()
+            received["warmup"] = json.loads(await websocket.receive_text())
+            await websocket.send_text(json.dumps({
+                "type": "response.completed",
+                "response": {"id": "warmup", "status": "completed"},
+            }))
+            received["payload"] = json.loads(await websocket.receive_text())
+            await websocket.send_text(json.dumps({
+                "type": "response.output_text.delta",
+                "output_index": 0,
+                "content_index": 0,
+                "delta": "Exact \\TeX",
+            }))
+            await websocket.send_text(json.dumps({
+                "type": "response.completed",
+                "response": {"status": "completed"},
+            }))
+            await websocket.close()
+
+        upstream_socket_fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        upstream_socket_fd.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        upstream_socket_fd.bind(("127.0.0.1", 0))
+        upstream_socket_fd.listen(16)
+        port = int(upstream_socket_fd.getsockname()[1])
+        server = uvicorn.Server(uvicorn.Config(
+            upstream_app,
+            log_level="critical",
+            access_log=False,
+            log_config=None,
+        ))
+        thread = threading.Thread(
+            target=server.run,
+            kwargs={"sockets": [upstream_socket_fd]},
+            daemon=True,
+        )
+        thread.start()
+        deadline = time.monotonic() + 3
+        while not server.started and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+        sink = EventSink()
+        try:
+            with ModelApiProxy(
+                "openai", sink, upstream=f"http://127.0.0.1:{port}"
+            ) as proxy:
+                url = proxy.url.replace("http://", "ws://") + "/responses?beta=true"
+                with websocket_connect(
+                    url,
+                    additional_headers={"Authorization": "Bearer secret-value"},
+                ) as client:
+                    client.send(json.dumps({
+                        "type": "response.create",
+                        "input": [],
+                        "generate": False,
+                        "stream": True,
+                    }))
+                    warmup = json.loads(client.recv())
+                    client.send(json.dumps({
+                        "type": "response.create",
+                        "input": "render exact TeX",
+                        "stream": True,
+                    }))
+                    first = json.loads(client.recv())
+                    second = json.loads(client.recv())
+        finally:
+            server.should_exit = True
+            thread.join(timeout=3)
+            upstream_socket_fd.close()
+
+        self.assertEqual(warmup["response"]["id"], "warmup")
+        self.assertEqual(first["delta"], "Exact \\TeX")
+        self.assertEqual(second["type"], "response.completed")
+        self.assertEqual(received["path"], "responses")
+        self.assertEqual(received["query"], "beta=true")
+        self.assertEqual(received["authorization"], "Bearer secret-value")
+        self.assertFalse(received["warmup"]["generate"])
+        self.assertEqual(received["payload"]["type"], "response.create")
+        self.assertEqual(
+            sum(event["type"] == "turn.started" for event in sink.events),
+            1,
+        )
+        self.assertEqual(
+            [event.get("delta") for event in sink.events if event["type"] == "assistant.delta"],
+            ["Exact \\TeX"],
+        )
+        response_event = next(
+            event for event in sink.events if event["type"] == "call.response"
+        )
+        self.assertEqual(response_event["transport"], "websocket")
 
 
 if __name__ == "__main__":

@@ -19,9 +19,12 @@ from urllib.parse import urlsplit
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
+from starlette.websockets import WebSocketDisconnect
+from websockets.asyncio.client import connect as websocket_connect
+from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 
 _HOP_BY_HOP = {
@@ -35,6 +38,13 @@ _HOP_BY_HOP = {
     "upgrade",
 }
 _REQUEST_STRIP = _HOP_BY_HOP | {"host", "content-length"}
+_WEBSOCKET_REQUEST_STRIP = _REQUEST_STRIP | {
+    "sec-websocket-accept",
+    "sec-websocket-extensions",
+    "sec-websocket-key",
+    "sec-websocket-protocol",
+    "sec-websocket-version",
+}
 # httpx decodes upstream content encodings as it streams. The downstream body
 # and the observer therefore both see the same decoded bytes, so the original
 # representation metadata must not be forwarded.
@@ -359,17 +369,12 @@ def route_child(
     if provider == "anthropic":
         child_env["ANTHROPIC_BASE_URL"] = proxy_url
     elif provider == "openai":
+        # Keep Codex's built-in OpenAI provider so its provider-specific
+        # capabilities (including Search) remain available. Only route its
+        # API traffic through the local proxy for this invocation.
         routed[1:1] = [
             "-c",
-            'model_provider="simultex"',
-            "-c",
-            'model_providers.simultex.name="SimulTeX OpenAI proxy"',
-            "-c",
-            f"model_providers.simultex.base_url={json.dumps(proxy_url)}",
-            "-c",
-            "model_providers.simultex.requires_openai_auth=true",
-            "-c",
-            "model_providers.simultex.supports_websockets=false",
+            f"openai_base_url={json.dumps(proxy_url)}",
         ]
     else:
         raise ValueError(f"unsupported provider: {provider}")
@@ -770,7 +775,122 @@ class ModelApiProxy:
                 background=BackgroundTask(upstream_response.aclose),
             )
 
+        @app.websocket("/{token}/{path:path}")
+        async def forward_websocket(token: str, path: str, websocket: WebSocket):
+            if not secrets.compare_digest(token, self.token):
+                await websocket.close(code=1008)
+                return
+
+            target = self._websocket_target_url(path, websocket)
+            headers = [
+                (name, value)
+                for name, value in websocket.headers.items()
+                if name.lower() not in _WEBSOCKET_REQUEST_STRIP
+            ]
+            offered_protocols = [
+                protocol.strip()
+                for protocol in websocket.headers.get(
+                    "sec-websocket-protocol", ""
+                ).split(",")
+                if protocol.strip()
+            ]
+
+            try:
+                async with websocket_connect(
+                    target,
+                    additional_headers=headers,
+                    subprotocols=offered_protocols or None,
+                    compression=None,
+                ) as upstream:
+                    await websocket.accept(subprotocol=upstream.subprotocol)
+                    await self._relay_websocket(websocket, upstream)
+            except WebSocketDisconnect:
+                return
+            except ConnectionClosed:
+                return
+            except (OSError, InvalidHandshake, TimeoutError):
+                if websocket.client_state.name != "DISCONNECTED":
+                    await websocket.close(code=1011)
+
         return app
+
+    async def _relay_websocket(self, downstream: WebSocket, upstream: Any) -> None:
+        active_observer: _OpenAIObserver | None = None
+
+        async def to_upstream() -> None:
+            nonlocal active_observer
+            while True:
+                message = await downstream.receive()
+                message_type = message["type"]
+                if message_type == "websocket.disconnect":
+                    await upstream.close()
+                    return
+                data = message.get("text")
+                if data is None:
+                    data = message.get("bytes")
+                if data is None:
+                    continue
+                if isinstance(data, str):
+                    try:
+                        payload = json.loads(data)
+                    except json.JSONDecodeError:
+                        payload = None
+                    if isinstance(payload, dict) and payload.get("type") == "response.create":
+                        # Codex prewarms the connection with generate=false.
+                        # It carries no conversation turn and should not be
+                        # published into the browser transcript.
+                        active_observer = None
+                    if (
+                        isinstance(payload, dict)
+                        and payload.get("type") == "response.create"
+                        and payload.get("generate") is not False
+                    ):
+                        response = {
+                            name: value
+                            for name, value in payload.items()
+                            if name != "type"
+                        }
+                        body = json.dumps(response).encode()
+                        context, _streaming = self._begin_observed_call("responses", body)
+                        active_observer = (
+                            _OpenAIObserver(self.coordinator, context, True)
+                            if context is not None
+                            else None
+                        )
+                        if context is not None:
+                            self.coordinator.publish(
+                                "call.response",
+                                context,
+                                content_type="application/json",
+                                streaming=True,
+                                transport="websocket",
+                            )
+                await upstream.send(data)
+
+        async def to_downstream() -> None:
+            async for data in upstream:
+                if active_observer is not None and isinstance(data, str):
+                    try:
+                        payload = json.loads(data)
+                    except json.JSONDecodeError:
+                        payload = None
+                    if isinstance(payload, dict):
+                        active_observer._event(payload)
+                if isinstance(data, str):
+                    await downstream.send_text(data)
+                else:
+                    await downstream.send_bytes(data)
+
+        tasks = {
+            asyncio.create_task(to_upstream()),
+            asyncio.create_task(to_downstream()),
+        }
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        for task in done:
+            task.result()
 
     def _begin_observed_call(
         self, path: str, body: bytes
@@ -813,10 +933,22 @@ class ModelApiProxy:
             target = f"{target}?{request.url.query}"
         return target
 
+    def _websocket_target_url(self, path: str, websocket: WebSocket) -> str:
+        root = self.upstream or self._default_upstream_headers(websocket.headers)
+        parsed = urlsplit(root)
+        scheme = "wss" if parsed.scheme == "https" else "ws"
+        target = f"{scheme}://{parsed.netloc}{parsed.path.rstrip('/')}/{path.lstrip('/')}"
+        if websocket.url.query:
+            target = f"{target}?{websocket.url.query}"
+        return target
+
     def _default_upstream(self, request: Request) -> str:
+        return self._default_upstream_headers(request.headers)
+
+    def _default_upstream_headers(self, headers: Mapping[str, str]) -> str:
         if self.provider == "anthropic":
             return "https://api.anthropic.com"
-        authorization = request.headers.get("authorization", "")
+        authorization = headers.get("authorization", "")
         if authorization.lower().startswith("bearer sk-"):
             return "https://api.openai.com/v1"
         return "https://chatgpt.com/backend-api/codex"
