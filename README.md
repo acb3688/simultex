@@ -6,6 +6,8 @@
 
 **A rich browser companion for Codex and Claude Code CLI.**
 
+https://github.com/user-attachments/assets/afec92f0-c074-44c8-b4f1-846d523018f0
+
 SimulTeX preserves the native terminal UI while turning the conversation into a
 readable, scrollable browser transcript. Prompts and responses render as rich
 Markdown.
