@@ -28,24 +28,24 @@ SimulTeX requires Python 3.10 or newer. From this repository:
 
 ```sh
 python3 -m pip install -e .
-simultex --browser -- codex
+simultex -- codex
 ```
 
 Claude Code works the same way:
 
 ```sh
-simultex --browser -- claude
+simultex -- claude
 ```
 
-Open the token-bearing URL printed by SimulTeX. Keyboard input stays in the
-terminal; the browser follows the session live. SimulTeX gives Claude Code a
-ten-second startup pause so you have time to open or copy the URL.
+Copy or open the token-bearing URL printed by SimulTeX, then press Enter to
+launch the child session. Keyboard input stays in the terminal; the browser
+follows the session live.
 
 Resume an existing Codex conversation with its exact saved Markdown:
 
 ```sh
-simultex --browser -- codex resume SESSION_ID
-simultex --browser -- codex resume --last
+simultex -- codex resume SESSION_ID
+simultex -- codex resume --last
 ```
 
 SimulTeX reads the matching local Codex rollout when an explicit UUID or
@@ -132,21 +132,21 @@ original URL remains in the snapshot.
 Use a fixed port when helpful for browser automation:
 
 ```sh
-simultex --browser --browser-port 8765 -- codex
+simultex --browser-port 8765 -- codex
 ```
 
 Disable authoritative API capture to test PTY reconstruction by itself:
 
 ```sh
-simultex --browser --no-api-proxy -- codex
+simultex --no-api-proxy -- codex
 ```
 
 Useful development and diagnostic options:
 
 ```sh
-simultex --browser --api-upstream URL -- codex
-simultex --browser --capture-raw codex.raw -- codex
-simultex --browser --no-dollar -- codex
+simultex --api-upstream URL -- codex
+simultex --capture-raw codex.raw -- codex
+simultex --no-dollar -- codex
 ```
 
 Raw captures can contain the complete terminal conversation and metadata.
@@ -182,44 +182,6 @@ Authoritative API transcripts are currently available for direct Codex CLI and
 Claude Code launches. Other commands still receive the PTY-backed browser view,
 but Markdown that the child removed before drawing the terminal cannot be
 recovered exactly.
-
-## Optional terminal LaTeX images
-
-SimulTeX can also replace terminal LaTeX with transparent inline images when used
-without `--browser`:
-
-```sh
-simultex -- codex
-```
-
-This optional mode requires `latex`, `dvipng`, and a Kitty-graphics-compatible
-terminal such as Kitty or Ghostty. Terminal.app receives normal passthrough
-output because it has no supported inline-image protocol.
-
-Run the environment check from Kitty or Ghostty:
-
-```sh
-simultex --check
-```
-
-Terminal rendering recognizes `\(...\)`, `\[...\]`, `$$...$$`, conservative
-`$...$`, and fenced `latex`/`tex` blocks. Rendering runs with shell escape
-disabled, restricted TeX file access, a temporary working directory, and a
-timeout. TeX remains a large interpreter, so this is not a hardened sandbox for
-hostile multi-tenant input.
-
-Useful terminal-rendering options include:
-
-```sh
-simultex --graphics kitty --check
-simultex --color 202020 -- codex
-simultex --no-dollar -- codex
-simultex --inline-rows 2 --max-rows 16 -- codex
-simultex --verbose -- codex
-```
-
-Inside tmux, Kitty graphics passthrough may require
-`set -g allow-passthrough on` in `~/.tmux.conf`.
 
 ## Development
 

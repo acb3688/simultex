@@ -36,8 +36,9 @@ def _hex_color(value: str) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="simultex",
-        description="Run a command in a PTY and replace LaTeX with terminal images.",
+        description="Run a command in a PTY with a rich browser transcript.",
     )
+    parser.set_defaults(browser=True)
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
         "--graphics",
@@ -92,21 +93,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="capture the child's raw PTY output for diagnosis (refuses to overwrite)",
     )
     parser.add_argument(
-        "--browser",
-        action="store_true",
-        help="mirror unchanged output to a read-only localhost rich transcript",
-    )
-    parser.add_argument(
         "--browser-port",
         type=int,
         default=0,
         metavar="PORT",
-        help="localhost port for --browser (default: choose an available port)",
+        help="localhost port for the browser companion (default: choose an available port)",
     )
     parser.add_argument(
         "--no-api-proxy",
         action="store_true",
-        help="disable authoritative model API capture in --browser mode",
+        help="disable authoritative model API capture in browser mode",
     )
     parser.add_argument(
         "--api-upstream",

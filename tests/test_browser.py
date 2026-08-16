@@ -109,9 +109,9 @@ class BrowserCompanionTests(unittest.TestCase):
 
         self.assertIn("img-src 'self' data: blob: http: https:", policy)
 
-    def test_cli_accepts_browser_options(self) -> None:
+    def test_cli_enables_browser_by_default_and_accepts_its_options(self) -> None:
         args = build_parser().parse_args(
-            ["--browser", "--browser-port", "8123", "--", "codex"]
+            ["--browser-port", "8123", "--", "codex"]
         )
 
         self.assertTrue(args.browser)
