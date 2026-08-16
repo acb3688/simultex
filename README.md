@@ -8,6 +8,8 @@
 
 https://github.com/user-attachments/assets/afec92f0-c074-44c8-b4f1-846d523018f0
 
+<p align="center">Demo (Codex)</p>
+
 SimulTeX preserves the native terminal UI while turning the conversation into a
 readable, scrollable browser transcript. Prompts and responses render as rich
 Markdown.
