@@ -57,9 +57,10 @@ simultex -- codex resume SESSION_ID
 simultex -- claude --resume SESSION_ID
 ```
 
-SimulTeX reads the matching local Codex rollout when an explicit UUID or
-`--last` selects the session. If that saved history is unavailable or uses an
-unknown format, startup continues with the PTY-derived transcript.
+SimulTeX reads matching local Codex rollouts for explicit UUID or `--last`
+resumes, and Claude session histories for explicit UUID resumes. If that saved
+history is unavailable or uses an unknown format, startup continues with the
+PTY-derived transcript.
 
 ## What you get
 
