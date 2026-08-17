@@ -238,8 +238,12 @@ export class ApiTranscript {
       const calls = turn.calls
         .map((call) => ({ call, source: callMarkdown(call) }))
         .filter(({ source }) => source);
+      const tailUnmatched = userIndex === undefined && turnIndex === turns.length - 1;
+      const callAssistantIndices = tailUnmatched
+        ? (calls.length ? assistantIndices.slice(-calls.length) : [])
+        : assistantIndices;
       const boundary = trailingUiBoundary(records, lower, upper);
-      const insertion = assistantIndices[0] ?? boundary;
+      const insertion = callAssistantIndices[0] ?? boundary;
       if (userIndex === undefined) {
         const base = records[insertion] ?? records[Math.max(0, insertion - 1)];
         before[insertion].push(apiRecord(
@@ -273,7 +277,7 @@ export class ApiTranscript {
 
       let lastClaimed = userIndex;
       calls.forEach(({ call, source }, callIndex) => {
-        const recordIndex = assistantIndices[callIndex];
+        const recordIndex = callAssistantIndices[callIndex];
         if (recordIndex === undefined) {
           const base = records[boundary]
             ?? records[userIndex]
@@ -293,7 +297,7 @@ export class ApiTranscript {
         && turn.calls.every((call) => call.completed || call.failed);
       const nextTurnIsMatched = turnIndex + 1 >= turns.length
         || matches.has(turnKey(turns[turnIndex + 1]));
-      if (calls.length && settled && nextTurnIsMatched) {
+      if (calls.length && settled && nextTurnIsMatched && !tailUnmatched) {
         for (const recordIndex of assistantIndices.slice(calls.length)) {
           replacements.set(recordIndex, null);
         }

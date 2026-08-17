@@ -119,6 +119,53 @@ test("restored Codex history repairs fences and math lost by the resumed TUI", (
   assert.match(reconciled[1].source, /\\\[/);
 });
 
+test("restored Claude history keeps pre-resume replies ahead of an unmatched tail turn", () => {
+  const transcript = new ApiTranscript();
+  beginTurn(transcript, "history-turn-1", "Yup. $x + y$", 1);
+  completeCall(transcript, "history-turn-1", "history-call-1", "Exact add example");
+  transcript.accept(event("turn.completed", { turn_id: "history-turn-1" }));
+  beginTurn(transcript, "history-turn-2", "Yo", 2);
+  completeCall(transcript, "history-turn-2", "history-call-2", "Yo. What do you want to build?");
+  transcript.accept(event("turn.completed", { turn_id: "history-turn-2" }));
+  beginTurn(transcript, "history-turn-3", "I don't know", 3);
+  transcript.accept(event("turn.completed", { turn_id: "history-turn-3" }));
+  beginTurn(transcript, "turn-1", "Write the Navier-Stokes equations", 1);
+  completeCall(transcript, "turn-1", "call-1", "Exact Navier-Stokes answer");
+
+  const restoredTail = record("terminal", "tail of an older response", 0);
+  const resumeNotice = record("assistant", "No response requested.", 8);
+  const composer = record("terminal", "❯", 12, { panel: true, messageRole: "user" });
+  const reconciled = transcript.reconcile([
+    restoredTail,
+    record("user", "Yup. $x + y$", 1),
+    record("assistant", "damaged add example", 2),
+    record("user", "Yo", 4),
+    record("assistant", "damaged greeting", 5),
+    record("user", "I don't know", 7),
+    resumeNotice,
+    record("assistant", "damaged Navier-Stokes answer", 10),
+    composer,
+  ]);
+
+  assert.deepEqual(
+    reconciled.map((item) => item.source),
+    [
+      "tail of an older response",
+      "Yup. $x + y$",
+      "Exact add example",
+      "Yo",
+      "Yo. What do you want to build?",
+      "I don't know",
+      "No response requested.",
+      "Write the Navier-Stokes equations",
+      "Exact Navier-Stokes answer",
+      "❯",
+    ],
+  );
+  assert.strictEqual(reconciled[6], resumeNotice);
+  assert.strictEqual(reconciled[9], composer);
+});
+
 test("a proxy user message is inserted when the TUI erased its panel", () => {
   const transcript = new ApiTranscript();
   beginTurn(transcript, "turn-1", "First prompt", 1);

@@ -12,6 +12,7 @@ from typing import TextIO
 
 from . import __version__
 from .browser import BrowserCompanion
+from .claude_history import claude_resume_history_events
 from .codex_history import codex_resume_history_events
 from .model_proxy import ModelApiProxy, detect_provider, route_child, validate_upstream
 from .protocol import KittyGraphics, TerminalGeometry, supports_kitty_graphics
@@ -210,6 +211,18 @@ def main(argv: list[str] | None = None) -> int:
                 if history_turns:
                     print(
                         f"simultex: restored {history_turns} previous Codex turns",
+                        file=sys.stderr,
+                    )
+            elif detected_provider == "anthropic":
+                history_events = claude_resume_history_events(command)
+                for event in history_events:
+                    companion.api_event(event)
+                history_turns = sum(
+                    event.get("type") == "turn.started" for event in history_events
+                )
+                if history_turns:
+                    print(
+                        f"simultex: restored {history_turns} previous Claude turns",
                         file=sys.stderr,
                     )
             provider = None if args.no_api_proxy else detected_provider
