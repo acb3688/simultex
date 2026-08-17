@@ -40,52 +40,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.set_defaults(browser=True)
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument(
-        "--graphics",
-        choices=("auto", "kitty", "none"),
-        default="auto",
-        help="terminal graphics protocol (default: auto)",
-    )
-    parser.add_argument(
-        "--color",
-        type=_hex_color,
-        default="E6EDF3",
-        metavar="RRGGBB",
-        help="equation foreground color (default: E6EDF3)",
-    )
-    parser.add_argument("--dpi", type=int, default=180, help="rendering DPI (default: 180)")
-    parser.add_argument(
-        "--inline-rows",
-        type=int,
-        default=1,
-        metavar="N",
-        help="height of inline equations in terminal rows (default: 1)",
-    )
-    parser.add_argument(
-        "--max-rows",
-        type=int,
-        default=12,
-        metavar="N",
-        help="maximum height of display equations (default: 12)",
-    )
+    # Terminal-only options are disabled while browser mode is mandatory.
+    # parser.add_argument("--graphics", choices=("auto", "kitty", "none"), default="auto")
+    # parser.add_argument("--color", type=_hex_color, default="E6EDF3", metavar="RRGGBB")
+    # parser.add_argument("--dpi", type=int, default=180)
+    # parser.add_argument("--inline-rows", type=int, default=1, metavar="N")
+    # parser.add_argument("--max-rows", type=int, default=12, metavar="N")
     parser.add_argument(
         "--no-dollar",
         action="store_true",
         help=r"disable $...$ recognition",
     )
-    parser.add_argument(
-        "--parser",
-        choices=("screen", "stream"),
-        default="screen",
-        help="reconstruct the VT screen or parse raw output (default: screen)",
-    )
-    parser.add_argument(
-        "--keep-latex",
-        action="store_true",
-        help="keep the source LaTeX before each rendered image",
-    )
-    parser.add_argument("--check", action="store_true", help="check TeX and graphics support, then exit")
-    parser.add_argument("--verbose", action="store_true", help="report render failures")
+    # parser.add_argument("--parser", choices=("screen", "stream"), default="screen")
+    # parser.add_argument("--keep-latex", action="store_true")
+    # parser.add_argument("--check", action="store_true")
+    # parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
         "--capture-raw",
         type=Path,
@@ -196,23 +165,23 @@ def _show_browser_startup(
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if not 50 <= args.dpi <= 600:
-        raise SystemExit("simultex: --dpi must be between 50 and 600")
-    if not 1 <= args.inline_rows <= 4:
-        raise SystemExit("simultex: --inline-rows must be between 1 and 4")
-    if not 1 <= args.max_rows <= 50:
-        raise SystemExit("simultex: --max-rows must be between 1 and 50")
+    # if not 50 <= args.dpi <= 600:
+    #     raise SystemExit("simultex: --dpi must be between 50 and 600")
+    # if not 1 <= args.inline_rows <= 4:
+    #     raise SystemExit("simultex: --inline-rows must be between 1 and 4")
+    # if not 1 <= args.max_rows <= 50:
+    #     raise SystemExit("simultex: --max-rows must be between 1 and 50")
     if not 0 <= args.browser_port <= 65535:
         raise SystemExit("simultex: --browser-port must be between 0 and 65535")
-    if args.keep_latex and args.parser == "screen":
-        raise SystemExit("simultex: --keep-latex requires --parser stream")
+    # if args.keep_latex and args.parser == "screen":
+    #     raise SystemExit("simultex: --keep-latex requires --parser stream")
     if args.api_upstream:
         try:
             args.api_upstream = validate_upstream(args.api_upstream)
         except ValueError as exc:
             raise SystemExit(f"simultex: {exc}") from None
-    if args.check:
-        return _check(args)
+    # if args.check:
+    #     return _check(args)
     command = args.command
     if command and command[0] == "--":
         command = command[1:]
