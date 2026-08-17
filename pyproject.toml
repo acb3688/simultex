@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "simultex"
-version = "0.1.0"
-description = "A PTY proxy that renders LaTeX as transparent terminal images"
+version = "0.1.1"
+description = "A rich browser companion for Codex and Claude Code CLI"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -20,6 +20,11 @@ dependencies = [
 
 [project.scripts]
 simultex = "simultex.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/acb3688/simultex"
+Repository = "https://github.com/acb3688/simultex"
+Issues = "https://github.com/acb3688/simultex/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/simultex"]

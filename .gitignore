@@ -4,3 +4,4 @@ browser-ui/node_modules/
 .playwright-mcp/
 dist/
 .DS_Store
+debug/

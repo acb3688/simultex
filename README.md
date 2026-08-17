@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="SimulTeX" width="320">
+  <img src="https://raw.githubusercontent.com/acb3688/simultex/main/assets/logo.svg" alt="SimulTeX" width="320">
 </p>
 
 # SimulTeX
@@ -50,7 +50,7 @@ Copy or open the token-bearing URL printed by SimulTeX, then press Enter to
 launch the child session. Keyboard input stays in the terminal; the browser
 follows the session live.
 
-Resume an existing Codex or Claude conversation with its exact saved Markdown:
+Resume an existing Codex or Claude conversation through its native CLI:
 
 ```sh
 simultex -- codex resume SESSION_ID
@@ -63,13 +63,11 @@ unknown format, startup continues with the PTY-derived transcript.
 
 ## What you get
 
-- The original Codex or Claude TUI, unchanged in your terminal
-- Exact user Markdown and assistant output for direct Codex and Claude sessions
-- Terminal composers, startup UI, tool/status output, and permission prompts
 - KaTeX math, including inline and display equations
 - Mermaid diagrams from fenced `mermaid` blocks
 - Syntax highlighting for explicitly labeled code fences
-- Markdown tables, lists, blockquotes, links, and images
+- Markdown tables, lists, blockquotes, and links
+- Local and remote images in Markdown messages
 - Click-to-copy regions for inline code, fenced code, `latex`/`tex` fences, and
   Mermaid source
 - Static, self-contained HTML transcript downloads
@@ -79,14 +77,14 @@ unknown format, startup continues with the PTY-derived transcript.
 
 - **Works with Codex and Claude.** Use the same browser experience with
   Codex CLI or Claude Code while continuing to work in their native TUIs.
-- **Rich rendering for user/assistant messages.** Both user messages and assistant responses
-  support Markdown, LaTeX, images, Mermaid diagrams, highlighted code, tables,
-  and more.
+- **Rich rendering for user/assistant messages.** Both user messages and
+  assistant responses support Markdown, LaTeX, images, Mermaid diagrams,
+  highlighted code, tables, and more.
 - **Search like a web page.** Search the entire conversation with
   <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>F</kbd>, scroll freely, and select or copy
   content without fighting terminal history.
-- **Share a live view.** Let students or collaborators follow the conversation
-  as it happens through screen sharing or a secure localhost tunnel.
+- **Share a live view.** Let trusted students or collaborators follow the
+  conversation through a secure SSH port forward.
 - **Let the agent focus on the answer.** The agent answers in Markdown;
   SimulTeX handles consistent rendering without asking it to author and style an
   HTML artifact.
@@ -136,7 +134,7 @@ Use a fixed port when helpful for browser automation:
 simultex --browser-port 8765 -- codex
 ```
 
-Disable authoritative API capture to test PTY reconstruction by itself:
+Try the experimental PTY-only renderer without authoritative API capture:
 
 ```sh
 simultex --no-api-proxy -- codex

@@ -1,3 +1,3 @@
-"""Render LaTeX from interactive programs directly in a terminal."""
+"""Provide a rich browser companion for terminal-based AI coding tools."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
